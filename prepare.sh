@@ -4,6 +4,7 @@ gdown --id 13Abvu5SUMSP3SJM-ZIj66mOkeyAquR73
 unzip sparc.zip
 
 # download pre-trained checkpoint
+mkdir pretrained_checkpoint
 curl https://gap-text2sql-public.s3.amazonaws.com/checkpoint-artifacts/pretrained-checkpoint -o pretrained_checkpoint/pytorch_model.bin
 
 # run
