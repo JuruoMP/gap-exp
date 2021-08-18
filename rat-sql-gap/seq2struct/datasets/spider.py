@@ -17,6 +17,7 @@ class SpiderItem:
     orig_schema = attr.ib()
     turn_change = attr.ib()
     turn_change_index = attr.ib()
+    sql_str = attr.ib()
 
 @attr.s
 class Column:
@@ -208,6 +209,7 @@ class SpiderDataset(torch.utils.data.Dataset):
                     orig_schema=self.schemas[entry['db_id']].orig,
                     turn_change=entry['turn_change'],
                     turn_change_index=entry['turn_change_index'],
+                    sql_str=entry['query'],
                 )
                 self.examples.append(item)
 

@@ -13,6 +13,7 @@ class Config(object):
 global_config_dict = {
     'reg_loss_weight': 1,
     'tc_loss_weight': 8,
+    'contrast_loss_weight': 10
 }
 
 if os.path.exists('global_config.json'):

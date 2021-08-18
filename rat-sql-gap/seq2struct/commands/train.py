@@ -4,6 +4,7 @@ import datetime
 import json
 import os
 
+from tqdm import tqdm
 import _jsonnet
 import attr
 import torch
@@ -120,7 +121,7 @@ class Trainer:
                 assert len(bert_params) > 0
                 non_bert_params = []
                 for name, _param in self.model.named_parameters():
-                    if "bert" not in name:
+                    if "encoder.bert_model" not in name:
                         non_bert_params.append(_param)
                 assert len(non_bert_params) + len(bert_params) == len(list(self.model.parameters()))
 
@@ -203,7 +204,8 @@ class Trainer:
 
         # 4. Start training loop
         with self.data_random:
-            for batch in train_data_loader:
+            pbar = tqdm(train_data_loader)
+            for batch in pbar:
                 # Quit if too long
                 if last_step >= self.train_config.max_steps:
                     break
@@ -226,7 +228,7 @@ class Trainer:
                         #     loss, reg_loss = self.model.compute_loss(batch)
                         # else:
                         #     loss, reg_loss = self.model.compute_loss(batch)
-                        loss, reg_loss, tc_loss = self.model.compute_loss(batch)
+                        loss, reg_loss, tc_loss, contrast_loss = self.model.compute_loss(batch)
                         self.check_print_nan(loss)
                         norm_loss = loss / self.train_config.num_batch_accumulated
                         norm_loss.backward()
@@ -244,12 +246,15 @@ class Trainer:
                     optimizer.zero_grad()
 
                 # Report metrics
+                logging_str = 'Step {}: loss={:.4f}'.format(last_step, loss.item())
+                if reg_loss is not None:
+                    logging_str += ', reg_loss_1={:.4f}, reg_loss_2={:.4f}'.format(reg_loss[0], reg_loss[1])
+                if tc_loss is not None:
+                    logging_str += ', tc_loss={:.4f}'.format(tc_loss)
+                if contrast_loss is not None:
+                    logging_str += ', contrast_loss={:.4f}'.format(contrast_loss)
+                pbar.set_description(logging_str)
                 if last_step % self.train_config.report_every_n == 0:
-                    logging_str = 'Step {}: loss={:.4f}'.format(last_step, loss.item())
-                    if reg_loss is not None:
-                        logging_str += ', reg_loss_1={:.4f}, reg_loss_2={:.4f}'.format(reg_loss[0], reg_loss[1])
-                    if tc_loss is not None:
-                        logging_str += ', tc_loss={:.4f}'.format(tc_loss)
                     self.logger.log(logging_str)
 
                 last_step += 1

@@ -3,6 +3,7 @@ import torch.utils.data
 
 from seq2struct.models import abstract_preproc
 from seq2struct.utils import registry
+from global_config import global_config
 
 import numpy as np
 
@@ -69,6 +70,10 @@ class EncDecModel(torch.nn.Module):
         self.decoder = registry.construct(
                 'decoder', decoder, device=device, preproc=preproc.dec_preproc)
         self.decoder.visualize_flag = False
+
+        # self.sql_encoder = registry.construct('sql_encoder', {'name': 'bert-encoder'}, device=device)
+        # self.sql_ff = torch.nn.Linear(768, 1024)
+        self.sql_cache = {}
         
         if getattr(self.encoder, 'batched'):
             self.compute_loss = self._compute_loss_enc_batched
@@ -83,28 +88,56 @@ class EncDecModel(torch.nn.Module):
         reg_loss1 = []
         reg_loss2 = []
         tc_loss = []
+        contrast_loss = []
 
         is_history = False
         for enc_state, (enc_input, dec_output) in zip(enc_states, batch):
             _loss = self.decoder.compute_loss(enc_input, dec_output, enc_state, debug)
+
+            sql_str = dec_output.sql_str
+            sql_contrast_loss = None
+            if sql_str in self.sql_cache:
+                target = self.sql_cache.get(sql_str)
+                sql_contrast_loss = torch.nn.functional.mse_loss(target, enc_state.bert_output, reduction='mean')
+            self.sql_cache[sql_str] = enc_state.bert_output.detach()
+
             if isinstance(_loss, tuple):
                 is_history = True
-                losses.append(_loss[0])
+                _loss_tensor = _loss[0]
+                if global_config.contrast_loss_weight > 0 and sql_contrast_loss is not None:
+                    _loss_tensor += global_config.contrast_loss_weight * sql_contrast_loss
+                    contrast_loss.append(sql_contrast_loss.item())
+                losses.append(_loss_tensor)
                 reg_loss1.append(_loss[1][0].item())
                 reg_loss2.append(_loss[1][1].item())
                 if enc_state.tc_loss != 0.0:
                     tc_loss.append(enc_state.tc_loss.item())
             else:
+                if global_config.contrast_loss_weight > 0 and sql_contrast_loss is not None:
+                    _loss += global_config.contrast_loss_weight * sql_contrast_loss
                 losses.append(_loss)
         if len(tc_loss) == 0:
             tc_loss = [0.0]
 
+        # use sql_encoder to calculate contrastive loss
+        # contrast_loss = []
+        # if True:  # contrastive loss
+        #     sql_str_list = [dec_output.sql_str for enc_input, dec_output in batch]
+        #     sql_reprs = self.sql_ff(self.sql_encoder(sql_str_list).pooler_output)
+        #     cls_vecs = torch.stack([x.bert_output for x in enc_states], dim=0)
+        #     contrast_loss.append(torch.nn.functional.mse_loss(cls_vecs, sql_reprs, reduction='mean'))
+
         if debug:
             return losses
-        elif is_history:
-            return torch.mean(torch.stack(losses, dim=0), dim=0), (np.mean(reg_loss1), np.mean(reg_loss2)), np.mean(tc_loss)
         else:
-            return torch.mean(torch.stack(losses, dim=0), dim=0)
+            ret = (torch.mean(torch.stack(losses, dim=0), dim=0),)
+            if is_history:
+                ret = ret + ((np.mean(reg_loss1), np.mean(reg_loss2)), np.mean(tc_loss))
+                if contrast_loss:
+                    ret = ret + (np.mean(contrast_loss), )
+                else:
+                    ret = ret + (None, )
+        return ret
 
     def _compute_loss_enc_batched2(self, batch, debug=False):
         losses = []
@@ -121,15 +154,18 @@ class EncDecModel(torch.nn.Module):
         losses = []
         reg_loss1 = []
         reg_loss2 = []
+        contrast_loss = []
         is_history = False
         for enc_input, dec_output in batch:
             enc_state = self.encoder(enc_input)
             _loss = self.decoder.compute_loss(enc_input, dec_output, enc_state, debug)
-            if isinstance(_loss,tuple):
+            if isinstance(_loss, tuple):
                 is_history = True
                 losses.append(_loss[0])
                 reg_loss1.append(_loss[1][0].item())
                 reg_loss2.append(_loss[1][1].item())
+                if _loss[2]:
+                    contrast_loss.append(_loss[2])
             else:
                 losses.append(_loss)
 
@@ -148,6 +184,7 @@ class EncDecModel(torch.nn.Module):
             result = {'loss': mean_loss * batch_size,
                       'reg_1': _loss[1][0] * batch_size, 'reg_2': _loss[1][1] * batch_size,
                       'tc': _loss[2] * batch_size,
+                      'contrast': _loss[3] if len(_loss) > 3 else None,
                       'total': batch_size}
             return result
         else:

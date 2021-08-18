@@ -7,4 +7,4 @@ unzip sparc.zip
 curl https://gap-text2sql-public.s3.amazonaws.com/checkpoint-artifacts/pretrained-checkpoint -o pretrained_checkpoint/pytorch_model.bin
 
 # run
-python run.py train experiments/sparc-tcs-configs/gap-run.jsonnet
+python run.py train experiments/sparc-contrast-configs/gap-run.jsonnet

@@ -84,6 +84,7 @@ def get_field_presence_info(ast_wrapper, node, field_infos):
 class NL2CodeDecoderPreprocItem:
     tree = attr.ib()
     orig_code = attr.ib()
+    sql_str = attr.ib()
 
 
 class NL2CodeDecoderPreproc(abstract_preproc.AbstractPreproc):
@@ -133,7 +134,9 @@ class NL2CodeDecoderPreproc(abstract_preproc.AbstractPreproc):
         self.items[section].append(
             NL2CodeDecoderPreprocItem(
                 tree=root,
-                orig_code=item.code))
+                orig_code=item.code,
+                sql_str=item.sql_str,
+            ))
     
     def clear_items(self):
         self.items = collections.defaultdict(list)

@@ -59,6 +59,8 @@ class HistorySpiderEncoderState:
     reg_loss = attr.ib()
     tc_loss = attr.ib()
 
+    bert_output = attr.ib()
+
     def find_word_occurrences(self, word):
         return [i for i, w in enumerate(self.words) if w == word]
 
@@ -1575,6 +1577,8 @@ class SpiderEncoderBartPreproc(SpiderEncoderV2Preproc):
             'foreign_keys': preproc_schema.foreign_keys,
             'foreign_keys_tables': preproc_schema.foreign_keys_tables,
             'primary_keys': preproc_schema.primary_keys,
+            'turn_change': item.turn_change,
+            'turn_change_index': item.turn_change_index
         }
 
     def validate_item(self, item, section):
@@ -2038,8 +2042,7 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
         att_masks_tensor = torch.LongTensor(att_mask_lists).to(self._device)
 
 
-        bert_output = self.bert_model(tokens_tensor,
-                                          attention_mask=att_masks_tensor)[0]
+        bert_output = self.bert_model(tokens_tensor, attention_mask=att_masks_tensor)[0]
 
         enc_output = bert_output
 
@@ -2139,7 +2142,8 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
                 m2c_align_mat=align_mat_item[0],
                 m2t_align_mat=align_mat_item[1],
                 reg_loss=(_loss_1, _loss_2),
-                tc_loss=_tc_loss  #turn switch loss
+                tc_loss=_tc_loss,  #turn switch loss
+                bert_output=bert_output[batch_idx, 0]
             ))
         return result
 
