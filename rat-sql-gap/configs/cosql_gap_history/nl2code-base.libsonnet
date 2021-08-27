@@ -37,7 +37,7 @@ function(output_from, data_path='data/cosql-20190205/') {
         name: 'EncDec',
         encoder: {
             name: 'spiderv2',
-            dropout: 0.3,
+            dropout: 0.2,
             word_emb_size: 300,
             question_encoder: ['emb', 'bilstm'],
             column_encoder: ['emb', 'bilstm-summarize'],
@@ -50,7 +50,7 @@ function(output_from, data_path='data/cosql-20190205/') {
         },
         decoder: {
             name: 'NL2Code',
-            dropout: 0.3,
+            dropout: 0.2,
             desc_attn: 'mha',
         },
         encoder_preproc: {

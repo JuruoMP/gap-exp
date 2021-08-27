@@ -1,5 +1,5 @@
 {
-    local exp_id = 3,
+    local exp_id = 1,
     logdir: "logdir/cosql_bart_run_%d" %exp_id,
     model_config: "configs/cosql_gap/gap-bart.jsonnet",
     model_config_args: {
@@ -27,6 +27,6 @@
     eval_output: "ie_dirs",
     eval_beam_size: 1,
     eval_use_heuristic: true,
-    eval_steps: [31100,32100,33100,34100,35100,36100,37100,38100,39100,40100,41000],
+    eval_steps: [100,1100,2100,3100,4100,5100,6100,7100,8100,9100,10100,11100,12100,13100,14100,15100,16100,17100,18100,19100,20100,21100,22100,23100,24100,25100,26100,27100,28100,29100,30100,31100,32100,33100,34100,35100,36100,37100,38100,39100,40100,41000],
     eval_section: "val",
 }

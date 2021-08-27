@@ -1,5 +1,5 @@
 {
-    local exp_id = 100,
+    local exp_id = 12,
     logdir: "logdir/sparc_bart_run_%d" %exp_id,
     model_config: "configs/sparc_gap/gap-bart.jsonnet",
     model_config_args: {

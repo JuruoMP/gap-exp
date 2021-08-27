@@ -4,7 +4,6 @@ import datetime
 import json
 import os
 
-from tqdm import tqdm
 import _jsonnet
 import attr
 import torch
@@ -121,7 +120,7 @@ class Trainer:
                 assert len(bert_params) > 0
                 non_bert_params = []
                 for name, _param in self.model.named_parameters():
-                    if "encoder.bert_model" not in name:
+                    if "bert" not in name:
                         non_bert_params.append(_param)
                 assert len(non_bert_params) + len(bert_params) == len(list(self.model.parameters()))
 
@@ -204,41 +203,35 @@ class Trainer:
 
         # 4. Start training loop
         with self.data_random:
-            pbar = tqdm(train_data_loader)
-            for batch in pbar:
+            for batch in train_data_loader:
                 # Quit if too long
                 if last_step >= self.train_config.max_steps:
                     break
 
                 # Evaluate model
-                if last_step % self.train_config.eval_every_n == 0:
-                    if self.train_config.eval_on_train:
-                        self._eval_model(self.logger, self.model, last_step, train_eval_data_loader, 'train',
-                                         num_eval_items=self.train_config.num_eval_items)
-                    if self.train_config.eval_on_val:
-                        self._eval_model(self.logger, self.model, last_step, val_data_loader, 'val',
-                                         num_eval_items=self.train_config.num_eval_items)
+                # if last_step % self.train_config.eval_every_n == 0:
+                #     if self.train_config.eval_on_train:
+                #         self._eval_model(self.logger, self.model, last_step, train_eval_data_loader, 'train',
+                #                          num_eval_items=self.train_config.num_eval_items)
+                #     if self.train_config.eval_on_val:
+                #         self._eval_model(self.logger, self.model, last_step, val_data_loader, 'val',
+                #                          num_eval_items=self.train_config.num_eval_items)
 
                 # Compute and apply gradient
                 with self.model_random:
                     for _i in range(self.train_config.num_batch_accumulated):
                         if _i > 0:  batch = next(train_data_loader)
-                        # reg_loss = None
-                        # if config["model"]["decoder"]["name"] is "NL2Code-history":
-                        #     loss, reg_loss = self.model.compute_loss(batch)
-                        # else:
-                        #     loss, reg_loss = self.model.compute_loss(batch)
-                        loss, reg_loss, tc_loss, contrast_loss = self.model.compute_loss(batch)
+                        loss = self.model.compute_loss(batch)
                         self.check_print_nan(loss)
                         norm_loss = loss / self.train_config.num_batch_accumulated
                         norm_loss.backward()
 
                     if self.train_config.clip_grad:
                         torch.nn.utils.clip_grad_norm_(optimizer.bert_param_group["params"], \
+                                                       self.train_config.clip_grad)
+                        # rat-transformer这里也clip
+                        torch.nn.utils.clip_grad_norm_(optimizer.non_bert_param_group["params"], \
                             self.train_config.clip_grad)
-                        #rat-transformer这里也clip
-                        # torch.nn.utils.clip_grad_norm_(optimizer.non_bert_param_group["params"], \
-                        #     self.train_config.clip_grad)
                         # torch.nn.utils.clip_grad_norm_(bert_param_group["params"], \
                         #     self.train_config.clip_grad)
                     optimizer.step()
@@ -246,20 +239,14 @@ class Trainer:
                     optimizer.zero_grad()
 
                 # Report metrics
-                logging_str = 'Step {}: loss={:.4f}'.format(last_step, loss.item())
-                if reg_loss is not None:
-                    logging_str += ', reg_loss_1={:.4f}, reg_loss_2={:.4f}'.format(reg_loss[0], reg_loss[1])
-                if tc_loss is not None:
-                    logging_str += ', tc_loss={:.4f}'.format(tc_loss)
-                if contrast_loss is not None:
-                    logging_str += ', contrast_loss={:.4f}'.format(contrast_loss)
-                pbar.set_description(logging_str)
                 if last_step % self.train_config.report_every_n == 0:
-                    self.logger.log(logging_str)
+                    self.logger.log('Step {}: loss={:.4f}'.format(last_step, loss.item()))
 
                 last_step += 1
                 # Run saver
-                if last_step % self.train_config.save_every_n == 0:
+                if last_step <= 30000 and last_step % (5 * self.train_config.save_every_n) == 0:
+                    saver.save(modeldir, last_step)
+                elif last_step % self.train_config.save_every_n == 0:
                     saver.save(modeldir, last_step)
 
             # Save final model
@@ -283,12 +270,12 @@ class Trainer:
         stats = collections.defaultdict(float)
         model.eval()
         with torch.no_grad():
-            for eval_batch in eval_data_loader:
-                batch_res = model.eval_on_batch(eval_batch)
-                for k, v in batch_res.items():
-                    stats[k] += v
-                if num_eval_items and stats['total'] > num_eval_items:
-                    break
+          for eval_batch in eval_data_loader:
+              batch_res = model.eval_on_batch(eval_batch)
+              for k, v in batch_res.items():
+                  stats[k] += v
+              if num_eval_items and stats['total'] > num_eval_items:
+                  break
         model.train()
 
         # Divide each stat by 'total'
@@ -300,7 +287,7 @@ class Trainer:
 
         logger.log("Step {} stats, {}: {}".format(
             last_step, eval_section, ", ".join(
-                "{} = {:.4f}".format(k, v) for k, v in stats.items())))
+                "{} = {}".format(k, v) for k, v in stats.items())))
 
 
 def add_parser():

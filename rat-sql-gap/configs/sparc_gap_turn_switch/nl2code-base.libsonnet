@@ -84,9 +84,9 @@ function(output_from, data_path='data/sparc-20190205/') {
         batch_size: 10,
         eval_batch_size: 50,
 
-        keep_every_n: 1000,
+        keep_every_n: 200,
         eval_every_n: 1000000,
-        save_every_n: 500,
+        save_every_n: 200,
         report_every_n: 100,
 
         max_steps: 41000,

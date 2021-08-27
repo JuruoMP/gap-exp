@@ -31,6 +31,7 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
                 num_heads: 8,
                 sc_link: args.sc_link,
                 cv_link: args.cv_link,
+                max_segment_id: 0,
             },
             summarize_header: args.summarize_header,
             use_column_type: args.use_column_type,
@@ -40,12 +41,23 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
             turn_switch_config+:  {
                     model:'turn-switch-classifier-interact',
                     vocab_path: _data_path + "turn_switch_label_vocab.json",
-                    exclude_other_loss:0,
+                    reg_loss_scalar:1,
                     hidden_dim: 1024,
                     dropout: 0.10,
                     leaky_rate:0.20,
-                    loss_scalar:1.0
-            }
+                    loss_scalar:4.0,
+                    mid_layer_activator:'relu',
+                    use_dynamic_loss_weight:0
+            },
+            turn_switch_col_config+:  {
+                    model:'turn-switch-col-classifier',
+                    vocab_path: _data_path + "turn_switch_col_vocab.json",
+                    hidden_dim: 1024,
+                    dropout: 0.10,
+                    loss_scalar:4.0,
+                    use_dynamic_loss_weight:0,
+                    use_pre_turn_diff:0
+            },
         },
         encoder_preproc+: {
             word_emb:: null,
@@ -80,7 +92,7 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
             desc_attn: 'mha',
             enc_recurrent_size: enc_size,
             recurrent_size : args.decoder_hidden_size,
-            loss_type: 'softmax',
+            loss_type: 'label_smooth',
             use_align_mat: args.use_align_mat,
             use_align_loss: args.use_align_loss,
         },

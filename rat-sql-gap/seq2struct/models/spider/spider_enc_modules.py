@@ -33,7 +33,7 @@ def get_attn_mask(seq_lengths):
     max_length, batch_size = int(max(seq_lengths)), len(seq_lengths)
     attn_mask = torch.LongTensor(batch_size, max_length, max_length).fill_(0)
     for batch_idx, seq_length in enumerate(seq_lengths):
-      attn_mask[batch_idx, :seq_length, :seq_length] = 1
+        attn_mask[batch_idx, :seq_length, :seq_length] = 1
     return attn_mask
 
 
@@ -46,8 +46,8 @@ class LookupEmbeddings(torch.nn.Module):
         self.emb_size = emb_size
 
         self.embedding = torch.nn.Embedding(
-                num_embeddings=len(self.vocab),
-                embedding_dim=emb_size)
+            num_embeddings=len(self.vocab),
+            embedding_dim=emb_size)
         if self.embedder:
             assert emb_size == self.embedder.dim
 
@@ -57,7 +57,7 @@ class LookupEmbeddings(torch.nn.Module):
         for i, word in enumerate(self.vocab):
             if self.embedder.contains(word):
                 init_embed_list.append( \
-                   self.embedder.lookup(word))
+                    self.embedder.lookup(word))
             else:
                 init_embed_list.append(self.embedding.weight[i])
         init_embed_weight = torch.stack(init_embed_list, 0)
@@ -182,17 +182,17 @@ class BiLSTM(torch.nn.Module):
 
         if use_native:
             self.lstm = torch.nn.LSTM(
-                    input_size=input_size,
-                    hidden_size=output_size // 2,
-                    bidirectional=True,
-                    dropout=dropout)
+                input_size=input_size,
+                hidden_size=output_size // 2,
+                bidirectional=True,
+                dropout=dropout)
             self.dropout = torch.nn.Dropout(dropout)
         else:
             self.lstm = variational_lstm.LSTM(
-                    input_size=input_size,
-                    hidden_size=int(output_size // 2),
-                    bidirectional=True,
-                    dropout=dropout)
+                input_size=input_size,
+                hidden_size=int(output_size // 2),
+                bidirectional=True,
+                dropout=dropout)
         self.summarize = summarize
         self.use_native = use_native
 
@@ -240,13 +240,16 @@ class BiLSTM(torch.nn.Module):
         # [batch * num descs, desc length, input_size]
         # with name `rearranged_all_embs`
         remapped_ps_indices = []
+
         def rearranged_all_embs_map_index(desc_lengths_idx, seq_idx):
             batch_idx, desc_idx, _ = desc_lengths[desc_lengths_idx]
             return batch_idx, boundaries[batch_idx][desc_idx] + seq_idx
+
         def rearranged_all_embs_gather_from_indices(indices):
             batch_indices, seq_indices = zip(*indices)
-            remapped_ps_indices[:] =  all_embs.raw_index(batch_indices, seq_indices)
+            remapped_ps_indices[:] = all_embs.raw_index(batch_indices, seq_indices)
             return all_embs.ps.data[torch.LongTensor(remapped_ps_indices)]
+
         rearranged_all_embs = batched_sequence.PackedSequencePlus.from_gather(
             lengths=[length for _, _, length in desc_lengths],
             map_index=rearranged_all_embs_map_index,
@@ -269,7 +272,8 @@ class BiLSTM(torch.nn.Module):
             # new_all_embs: PackedSequencePlus, [batch, num descs, input_size]
             new_all_embs = batched_sequence.PackedSequencePlus.from_gather(
                 lengths=[len(boundaries_for_item) - 1 for boundaries_for_item in boundaries],
-                map_index=lambda batch_idx, desc_idx: rearranged_all_embs.sort_to_orig[batch_desc_to_flat_map[batch_idx, desc_idx]],
+                map_index=lambda batch_idx, desc_idx: rearranged_all_embs.sort_to_orig[
+                    batch_desc_to_flat_map[batch_idx, desc_idx]],
                 gather_from_indices=lambda indices: h[torch.LongTensor(indices)])
 
             new_boundaries = [
@@ -287,49 +291,51 @@ class BiLSTM(torch.nn.Module):
 class RelationalTransformerUpdate(torch.nn.Module):
 
     def __init__(self, device, num_layers, num_heads, hidden_size,
-            ff_size=None,
-            dropout=0.1,
-            merge_types=False,
-            tie_layers=False,
-            qq_max_dist=2,
-            #qc_token_match=True,
-            #qt_token_match=True,
-            #cq_token_match=True,
-            cc_foreign_key=True,
-            cc_table_match=True,
-            cc_max_dist=2,
-            ct_foreign_key=True,
-            ct_table_match=True,
-            #tq_token_match=True,
-            tc_table_match=True,
-            tc_foreign_key=True,
-            tt_max_dist=2,
-            tt_foreign_key=True,
-            sc_link=False,
-            cv_link=False,
-            ):
+                 ff_size=None,
+                 dropout=0.1,
+                 merge_types=False,
+                 tie_layers=False,
+                 qq_max_dist=2,
+                 # qc_token_match=True,
+                 # qt_token_match=True,
+                 # cq_token_match=True,
+                 cc_foreign_key=True,
+                 cc_table_match=True,
+                 cc_max_dist=2,
+                 ct_foreign_key=True,
+                 ct_table_match=True,
+                 # tq_token_match=True,
+                 tc_table_match=True,
+                 tc_foreign_key=True,
+                 tt_max_dist=2,
+                 tt_foreign_key=True,
+                 sc_link=False,
+                 cv_link=False,
+                 ):
         super().__init__()
         self._device = device
         self.num_heads = num_heads
 
-        self.qq_max_dist    = qq_max_dist
-        #self.qc_token_match = qc_token_match
-        #self.qt_token_match = qt_token_match
-        #self.cq_token_match = cq_token_match
+        self.qq_max_dist = qq_max_dist
+        # self.qc_token_match = qc_token_match
+        # self.qt_token_match = qt_token_match
+        # self.cq_token_match = cq_token_match
         self.cc_foreign_key = cc_foreign_key
         self.cc_table_match = cc_table_match
-        self.cc_max_dist    = cc_max_dist
+        self.cc_max_dist = cc_max_dist
         self.ct_foreign_key = ct_foreign_key
         self.ct_table_match = ct_table_match
-        #self.tq_token_match = tq_token_match
+        # self.tq_token_match = tq_token_match
         self.tc_table_match = tc_table_match
         self.tc_foreign_key = tc_foreign_key
-        self.tt_max_dist    = tt_max_dist
+        self.tt_max_dist = tt_max_dist
         self.tt_foreign_key = tt_foreign_key
 
         self.relation_ids = {}
+
         def add_relation(name):
             self.relation_ids[name] = len(self.relation_ids)
+
         def add_rel_dist(name, max_dist):
             for i in range(-max_dist, max_dist + 1):
                 add_relation((name, i))
@@ -337,15 +343,15 @@ class RelationalTransformerUpdate(torch.nn.Module):
         add_rel_dist('qq_dist', qq_max_dist)
 
         add_relation('qc_default')
-        #if qc_token_match:
+        # if qc_token_match:
         #    add_relation('qc_token_match')
 
         add_relation('qt_default')
-        #if qt_token_match:
+        # if qt_token_match:
         #    add_relation('qt_token_match')
 
         add_relation('cq_default')
-        #if cq_token_match:
+        # if cq_token_match:
         #    add_relation('cq_token_match')
 
         add_relation('cc_default')
@@ -365,7 +371,7 @@ class RelationalTransformerUpdate(torch.nn.Module):
             add_relation('ct_any_table')
 
         add_relation('tq_default')
-        #if cq_token_match:
+        # if cq_token_match:
         #    add_relation('tq_token_match')
 
         add_relation('tc_default')
@@ -466,7 +472,7 @@ class RelationalTransformerUpdate(torch.nn.Module):
             tie_layers)
 
         self.align_attn = transformer.PointerWithRelations(hidden_size,
-            len(self.relation_ids), dropout)
+                                                           len(self.relation_ids), dropout)
 
     def create_align_mask(self, num_head, q_length, c_length, t_length):
         # mask with size num_heads * all_len * all * len
@@ -480,7 +486,6 @@ class RelationalTransformerUpdate(torch.nn.Module):
         mask = torch.cat([mask_1, mask_2], 0)
         return mask
 
-
     def forward_unbatched(self, desc, q_enc, c_enc, c_boundaries, t_enc, t_boundaries):
         # enc shape: total len x batch (=1) x recurrent size
         enc = torch.cat((q_enc, c_enc, t_enc), dim=0)
@@ -490,12 +495,12 @@ class RelationalTransformerUpdate(torch.nn.Module):
 
         # Catalogue which things are where
         relations = self.compute_relations(
-                desc,
-                enc_length=enc.shape[1],
-                q_enc_length=q_enc.shape[0],
-                c_enc_length=c_enc.shape[0],
-                c_boundaries=c_boundaries,
-                t_boundaries=t_boundaries)
+            desc,
+            enc_length=enc.shape[1],
+            q_enc_length=q_enc.shape[0],
+            c_enc_length=c_enc.shape[0],
+            c_boundaries=c_boundaries,
+            t_boundaries=t_boundaries)
 
         relations_t = torch.LongTensor(relations).to(self._device)
         enc_new = self.encoder(enc, relations_t, mask=None)
@@ -508,9 +513,9 @@ class RelationalTransformerUpdate(torch.nn.Module):
         t_enc_new = enc_new[:, t_base:]
 
         m2c_align_mat = self.align_attn(enc_new, enc_new[:, c_base:t_base], \
-            enc_new[:, c_base:t_base], relations_t[:, c_base:t_base])
+                                        enc_new[:, c_base:t_base], relations_t[:, c_base:t_base])
         m2t_align_mat = self.align_attn(enc_new, enc_new[:, t_base:], \
-            enc_new[:, t_base:], relations_t[:, t_base:])
+                                        enc_new[:, t_base:], relations_t[:, t_base:])
         return q_enc_new, c_enc_new, t_enc_new, (m2c_align_mat, m2t_align_mat)
 
     def forward(self, descs, q_enc, c_enc, c_boundaries, t_enc, t_boundaries):
@@ -558,7 +563,8 @@ class RelationalTransformerUpdate(torch.nn.Module):
             gather_from_indices=gather_from_enc_new)
         t_enc_new = batched_sequence.PackedSequencePlus.from_gather(
             lengths=t_enc_lengths,
-            map_index=lambda batch_idx, seq_idx: (batch_idx, q_enc_lengths[batch_idx] + c_enc_lengths[batch_idx] + seq_idx),
+            map_index=lambda batch_idx, seq_idx: (
+            batch_idx, q_enc_lengths[batch_idx] + c_enc_lengths[batch_idx] + seq_idx),
             gather_from_indices=gather_from_enc_new)
         return q_enc_new, c_enc_new, t_enc_new
 
@@ -582,7 +588,7 @@ class RelationalTransformerUpdate(torch.nn.Module):
 
         relations = np.empty((enc_length, enc_length), dtype=np.int64)
 
-        for i, j in itertools.product(range(enc_length),repeat=2):
+        for i, j in itertools.product(range(enc_length), repeat=2):
             def set_relation(name):
                 relations[i, j] = self.relation_ids[name]
 
@@ -633,7 +639,7 @@ class RelationalTransformerUpdate(torch.nn.Module):
                             if desc['foreign_keys'].get(str(col2)) == col1:
                                 set_relation('cc_foreign_key_backward')
                         if (self.cc_table_match and
-                            desc['column_to_table'][str(col1)] == desc['column_to_table'][str(col2)]):
+                                desc['column_to_table'][str(col1)] == desc['column_to_table'][str(col2)]):
                             set_relation('cc_table_match')
 
                 elif j_type[0] == 'table':
@@ -706,7 +712,7 @@ class NoOpUpdate:
         pass
 
     def __call__(self, desc, q_enc, c_enc, c_boundaries, t_enc, t_boundaries):
-        #return q_enc.transpose(0, 1), c_enc.transpose(0, 1), t_enc.transpose(0, 1)
+        # return q_enc.transpose(0, 1), c_enc.transpose(0, 1), t_enc.transpose(0, 1)
         return q_enc, c_enc, t_enc
 
     def forward_unbatched(self, desc, q_enc, c_enc, c_boundaries, t_enc, t_boundaries):
@@ -714,8 +720,7 @@ class NoOpUpdate:
         The same interface with RAT
         return: encodings with size: length * embed_size, alignment matrix
         """
-        return q_enc.transpose(0,1), c_enc.transpose(0,1), t_enc.transpose(0,1), (None, None)
-
+        return q_enc.transpose(0, 1), c_enc.transpose(0, 1), t_enc.transpose(0, 1), (None, None)
 
 
 # liyutian multi turn
@@ -743,7 +748,8 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
                  tt_foreign_key=True,
                  sc_link=False,
                  cv_link=False,
-                 turn_switch_config=defaultdict(int)
+                 turn_switch_config=defaultdict(int),
+                 turn_switch_col_config=defaultdict(int)
                  ):
         super().__init__()
         self._device = device
@@ -888,15 +894,29 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
         if ff_size is None:
             ff_size = hidden_size * 4
 
-        #zhanghanchu
-        turn_switch_config['device'] = self._device
+        # zhanghanchu
+        turn_switch_col_config['device'] = turn_switch_config['device'] = self._device
         turn_switch_config['input_dim'] = hidden_size
+        turn_switch_col_config['input_dim'] = hidden_size*turn_switch_col_config.get("use_pre_turn_diff") \
+            if turn_switch_col_config.get("use_pre_turn_diff", 0) else hidden_size
+
         self.turn_switch_config = turn_switch_config
+        self.turn_switch_col_config = turn_switch_col_config
+
         self.encode_num_layers = num_layers
         self.turn_switch_classifier = registry.instantiate(registry.lookup('multitask', turn_switch_config['model']),
                                                            config=turn_switch_config)
-        print("exclude_other_loss={}".format(self.turn_switch_config["exclude_other_loss"]))
-        if self.turn_switch_config["exclude_other_loss"]:
+        self.turn_switch_col_classifier = registry.instantiate(
+            registry.lookup('multitask', turn_switch_col_config['model']),
+            config=turn_switch_col_config)
+        self.dynamic_loss_weighter = None
+        if turn_switch_config.get("use_dynamic_loss_weight", 0) or turn_switch_col_config.get("use_dynamic_loss_weight",
+                                                                                              0):
+            self.dynamic_loss_weighter = registry.instantiate(registry.lookup('multitask', "dynamic_loss_weight"),
+                                                              config=turn_switch_config)
+
+        print("reg_loss_scalar={}".format(self.turn_switch_config["reg_loss_scalar"]))
+        if self.turn_switch_config["reg_loss_scalar"] <= 0:
             self.encoder = transformer.Encoder(
                 lambda: transformer.EncoderLayer(
                     hidden_size,
@@ -947,6 +967,7 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
         mask = torch.cat([mask_1, mask_2], 0)
         return mask
 
+    # zhanghanchu
     def forward_unbatched(self, desc, q_enc, c_enc, c_boundaries, t_enc, t_boundaries, sep_id, history_reg):
         # enc shape: total len x batch (=1) x recurrent size
         enc = torch.cat((q_enc, c_enc, t_enc), dim=0)
@@ -964,19 +985,20 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
             t_boundaries=t_boundaries)
 
         relations_t = torch.LongTensor(relations).to(self._device)
-
-        enc_new, loss_1, loss_2 = self.encoder(enc, relations_t, mask=None, sep_id=sep_id, history_reg=history_reg)
-        if self.turn_switch_config["exclude_other_loss"]:  # 用原始的loss
-            loss_1 = loss_2 = 0.0
+        if self.turn_switch_config["reg_loss_scalar"] <= 0:  # 用原始的loss
+            enc_new = self.encoder(enc, relations_t, mask=None)
+            loss = 0.0
+        else:  # HistoryEncoder
+            enc_new, loss = self.encoder(enc, relations_t, mask=None, sep_id=sep_id, history_reg=history_reg)
 
         # 这里添加turn switch 标签 bs=1 (1,turn_len,num_labels)
         # zhanghanchu
         lable_tc_t = self.turn_switch_classifier.create_label_t(desc['turn_change_index'])
         tc_mask_t = self.turn_switch_classifier.create_mask_t(desc['turn_change_index'])
-        sep_id = torch.cat((sep_id, torch.zeros(self.turn_switch_classifier.turn_len - len(sep_id)).to(self._device)))
-        turn_change_output = self.turn_switch_classifier(enc_new,  sep_id=sep_id, mask=tc_mask_t,label=lable_tc_t)
+        sep_id_t = torch.cat((sep_id, torch.zeros(self.turn_switch_classifier.turn_len - len(sep_id)).to(self._device)))
+        turn_change_output = self.turn_switch_classifier(enc_new, sep_id=sep_id_t, mask=tc_mask_t, label=lable_tc_t)
         turn_change_loss = turn_change_output['loss']
-
+        comprehensive_sep_embed = turn_change_output['comprehensive_sep_embed']
 
         # Split updated_enc again
         c_base = q_enc.shape[0]
@@ -985,11 +1007,39 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
         c_enc_new = enc_new[:, c_base:t_base]
         t_enc_new = enc_new[:, t_base:]
 
+        col_embed_large = enc_new[:, c_base:]
+        if self.turn_switch_col_config.get("use_pre_turn_diff", 0):
+            last_sep_diff_embed = turn_change_output['diff_embed'][:, len(sep_id) - 1, :]  # [bs, 1, 1024]
+
+            last_sep_pointwise_embed = turn_change_output['pointwise_embed'][:, len(sep_id) - 1, :]  # [bs, 1, 1024]
+
+            last_sep_embed = torch.cat((last_sep_diff_embed,last_sep_pointwise_embed),-1).unsqueeze(-2)
+
+            col_tab_embed = enc_new[:, c_base:]
+            last_sep_embed_expand = last_sep_embed.expand(last_sep_embed.shape[0], col_tab_embed.shape[1], last_sep_embed.shape[-1])
+
+            # [bs, num_col_tab, 1024]
+            col_tab_embed_ext = torch.cat((col_tab_embed, last_sep_embed_expand),-1)
+            col_embed_large = col_tab_embed_ext
+
+        lable_tc_t = self.turn_switch_col_classifier.create_label_t(desc['turn_change_col'],
+                                                                    c_enc.shape[0] + t_enc.shape[0])
+        turn_change_col_loss = self.turn_switch_col_classifier(col_embed_large, lable_tc_t)['loss']
+
+        # 在这里加入门控 zhanghanchu
+        # h = sep_embed[-1]
+        # h*W ==> [0.7] turn-switch 的loss的权重
+        if self.dynamic_loss_weighter:
+            tcs_loss_weight = self.dynamic_loss_weighter(comprehensive_sep_embed[:, -1, :])
+            turn_change_loss = tcs_loss_weight[0] * turn_change_loss + tcs_loss_weight[1] * turn_change_col_loss
+        else:
+            turn_change_loss = turn_change_loss + turn_change_col_loss
+
         m2c_align_mat = self.align_attn(enc_new, enc_new[:, c_base:t_base], \
                                         enc_new[:, c_base:t_base], relations_t[:, c_base:t_base])
         m2t_align_mat = self.align_attn(enc_new, enc_new[:, t_base:], \
                                         enc_new[:, t_base:], relations_t[:, t_base:])
-        return q_enc_new, c_enc_new, t_enc_new, (m2c_align_mat, m2t_align_mat), loss_1, loss_2, turn_change_loss
+        return q_enc_new, c_enc_new, t_enc_new, (m2c_align_mat, m2t_align_mat), loss, turn_change_loss
 
     def forward(self, descs, q_enc, c_enc, c_boundaries, t_enc, t_boundaries):
         # TODO: Update to also compute m2c_align_mat and m2t_align_mat
@@ -1037,7 +1087,7 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
         t_enc_new = batched_sequence.PackedSequencePlus.from_gather(
             lengths=t_enc_lengths,
             map_index=lambda batch_idx, seq_idx: (
-            batch_idx, q_enc_lengths[batch_idx] + c_enc_lengths[batch_idx] + seq_idx),
+                batch_idx, q_enc_lengths[batch_idx] + c_enc_lengths[batch_idx] + seq_idx),
             gather_from_indices=gather_from_enc_new)
         return q_enc_new, c_enc_new, t_enc_new
 

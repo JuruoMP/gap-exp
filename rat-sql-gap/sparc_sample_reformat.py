@@ -1,8 +1,8 @@
 import json
 
-IS_REORDER = True
+IS_REORDER = False
 
-SEP = '<s>'
+SEP = '<#>'
 
 
 def format_one_session(session_dict,is_train):
@@ -60,10 +60,7 @@ def reformat(in_path,out_path, is_train):
         if is_final:
             final_number+=1
     print("final add number:{}".format(final_number))
-    if is_train:
-        with open("/Users/liyt/Desktop/workspace/NL2SQL/coco_sql/data/sparc_train_pure_aug.json","r") as f:
-            aug = json.load(f)
-            spider = spider+aug
+
 
     max_query_len = 0
     for sample in spider:
@@ -77,8 +74,8 @@ def reformat(in_path,out_path, is_train):
         json.dump( spider,f,indent=4)
 
 if __name__ =="__main__":
-    # reformat("cosql_dataset/sql_state_tracking/cosql_train.json","cosql_dataset/train.json",True)
-    # reformat("cosql_dataset/sql_state_tracking/cosql_dev.json","cosql_dataset/dev.json",False)
-    reformat("sparc/train.json","sparc/train_sparc_aug.json",True)
-    reformat("sparc/dev.json","sparc/dev_sparc_aug.json",False)
+    reformat("cosql_dataset/sql_state_tracking/cosql_train.json","cosql_dataset/train.json",True)
+    reformat("cosql_dataset/sql_state_tracking/cosql_dev.json","cosql_dataset/dev.json",False)
+    # reformat("sparc/train.json","sparc/train_sparc_final.json",True)
+    # reformat("sparc/dev.json","sparc/dev_sparc_final.json",False)
     # reformat("sparc/test.json", "sparc/test_bert_reorder_sparc.json")

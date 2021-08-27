@@ -209,23 +209,23 @@ def attention_with_history_relations(query, key, value, relation_k, relation_v, 
 
     zeros = scores-scores
     for i in range(sep_pred.shape[-1]):
-        _sep_pred = sep_pred[:, :, i].view(sep_pred.shape[0], sep_pred.shape[1], 1, 1)
-        _sep_pred = _sep_pred.expand(zeros[:, :, i:, i:].shape)
-        zeros[:, :, i:, i:] += scores[:, :, i:, i:] * _sep_pred
+        _sep_pred = sep_pred[:,:,i].view(sep_pred.shape[0],sep_pred.shape[1],1,1)
+        _sep_pred = _sep_pred.expand(zeros[:,:,sep_id[i]:,sep_id[i]:].shape)
+        zeros[:,:,sep_id[i]:,sep_id[i]:] += scores[:,:,sep_id[i]:,sep_id[i]:]*_sep_pred
     scores = zeros
 
     # reg loss 1
-    reg_loss_1 = torch.mean(1-torch.norm(sep_pred,float('inf'), dim=-1))
+    loss = torch.mean(1 - torch.norm(sep_pred, float('inf'), dim=-1))
 
     # calculate reg loss 2
-    sep_pred = torch.log(sep_pred.view(-1,sep_pred.shape[-1]))
+    sep_pred = torch.log(sep_pred.view(-1, sep_pred.shape[-1]))
     history_reg = history_reg.expand(sep_pred.shape)
-    reg_loss_2 = F.kl_div(sep_pred,history_reg)
+    loss += F.kl_div(sep_pred, history_reg)
 
     p_attn_orig = F.softmax(scores, dim=-1)
     if dropout is not None:
         p_attn = dropout(p_attn_orig)
-    return relative_attention_values(p_attn, value, relation_v), p_attn_orig, reg_loss_1, reg_loss_2
+    return relative_attention_values(p_attn, value, relation_v), p_attn_orig, loss
 
 
 class PointerWithRelations(nn.Module):
@@ -307,7 +307,7 @@ class MultiHeadedAttentionWithRelations(nn.Module):
 
         # 3) "Concat" using a view and apply a final linear.
         x = x.transpose(1, 2).contiguous() \
-             .view(nbatches, -1, self.h * self.d_k)
+            .view(nbatches, -1, self.h * self.d_k)
         return self.linears[-1](x)
 
 
@@ -348,7 +348,7 @@ class MultiHeadedAttentionWithHistoryRelations(nn.Module):
 
         # 2) Apply attention on all the projected vectors in batch.
         # x shape: [batch, heads, num queries, depth]
-        x, self.attn, reg_loss1, reg_loss2 = attention_with_history_relations(
+        x, self.attn, loss = attention_with_history_relations(
             query,
             key,
             value,
@@ -362,13 +362,14 @@ class MultiHeadedAttentionWithHistoryRelations(nn.Module):
 
         # 3) "Concat" using a view and apply a final linear.
         x = x.transpose(1, 2).contiguous() \
-             .view(nbatches, -1, self.h * self.d_k)
-        return self.linears[-1](x), reg_loss1, reg_loss2
+            .view(nbatches, -1, self.h * self.d_k)
+        return self.linears[-1](x), loss
 
 
 # Adapted from The Annotated Transformer
 class Encoder(nn.Module):
     "Core encoder is a stack of N layers"
+
     def __init__(self, layer, layer_size, N, tie_layers=False):
         super(Encoder, self).__init__()
         if tie_layers:
@@ -377,14 +378,15 @@ class Encoder(nn.Module):
         else:
             self.layers = clones(layer, N)
         self.norm = nn.LayerNorm(layer_size)
-         
-         # TODO initialize using xavier
-        
+
+        # TODO initialize using xavier
+
     def forward(self, x, relation, mask):
         "Pass the input (and mask) through each layer in turn."
         for layer in self.layers:
             x = layer(x, relation, mask)
         return self.norm(x)
+
 
 # liyutian
 # Adapted from The Annotated Transformer
@@ -405,14 +407,12 @@ class HistoryEncoder(nn.Module):
 
     def forward(self, x, relation, mask, sep_id, history_reg):
         "Pass the input (and mask) through each layer in turn."
-        loss_1 = torch.tensor(0.0).to(self._device)
-        loss_2 = torch.tensor(0.0).to(self._device)
+        loss = torch.tensor(0.0).to(self._device)
         for layer in self.layers:
-            x, reg_loss_1, reg_loss_2 = layer(x, relation, mask, sep_id, history_reg)
-            loss_1 += reg_loss_1
-            loss_2 += reg_loss_2
+            x, _loss = layer(x, relation, mask, sep_id, history_reg)
+            loss += _loss
 
-        return self.norm(x), loss_1, loss_2
+        return self.norm(x), loss
 
 
 # zhanghanchu
@@ -515,18 +515,37 @@ class TurnSwitchClassifier(nn.Module):
         #
         # probs = torch.nn.functional.softmax(logits, dim=-1)
 
+@registry.register('multitask', 'dynamic_loss_weight')
+class TurnSwitchDynamicLossWeight(nn.Module):
+    def __init__(self, input_dim, hidden_dim,  device=None):
+        super(TurnSwitchDynamicLossWeight, self).__init__()
+        self._device = device
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+
+        weight_layer = torch.nn.Sequential(
+            nn.Linear(self.input_dim * 4, self.hidden_dim),
+            nn.Tanh(),
+            nn.Linear(self.hidden_dim, 1),      #====>输出的一个分数
+            nn.Sigmoid()    #====>分数压缩到(0,1)之间
+        )
+        self.layers = clones(lambda: weight_layer, 2)
+
+    def forward(self, embedded_input):
+        scores = [torch.squeeze(layer(embedded_input)) for layer in self.layers]
+        return scores
 
 @registry.register('multitask', 'turn-switch-classifier-interact')
 class TurnSwitchClassifierInteract(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, vocab_path, dropout=0.1, device=None, leaky_rate=0.2, loss_scalar=1):
+    def __init__(self, input_dim, hidden_dim, vocab_path, dropout=0.1, device=None, leaky_rate=0.2, loss_scalar=4, mid_layer_activator='relu',max_turn_len=6):
         super(TurnSwitchClassifierInteract, self).__init__()
-        self.turn_len = 6
+        self.turn_len = max_turn_len
         self._device = device
         self.input_dim = input_dim
-        self.hidden_dim = hidden_dim  # 用不着
+        self.hidden_dim = hidden_dim  #用不着
 
-        self._loss = nn.BCELoss()  # 替换掉 nn.BCEWithLogitsLoss()
+        self._loss = nn.BCELoss() #替换掉 nn.BCEWithLogitsLoss()
 
         self.vocab = Vocab.load(vocab_path)
         self.switch_label_size = len(self.vocab)
@@ -535,19 +554,14 @@ class TurnSwitchClassifierInteract(nn.Module):
 
         self.loss_scalar = loss_scalar
 
-        # self.turn_switch_label_embeddings = torch.nn.Embedding(
-        #     num_embeddings=self.switch_label_size,
-        #     embedding_dim=self.input_dim
-        # )
-
         if dropout:
             self.dropout = torch.nn.Dropout(dropout)
         else:
             self.dropout = None
-
+        print("mid_layer_activator:{}".format(mid_layer_activator))
         self._classification_layer = torch.nn.Sequential(
-            nn.Linear(self.input_dim*4, self.hidden_dim),
-            nn.LeakyReLU(leaky_rate),
+            nn.Linear(self.input_dim * 4, self.hidden_dim),
+            nn.LeakyReLU(leaky_rate) if mid_layer_activator == 'relu' else nn.Tanh(),
             nn.Linear(self.hidden_dim, self.switch_label_size),
             nn.Sigmoid()
         )
@@ -573,11 +587,13 @@ class TurnSwitchClassifierInteract(nn.Module):
 
         pre_turn_sep_id = torch.cat((torch.tensor([0]).to(self._device), sep_id[:-1]), 0).long()
         pre_turn_select_embedded = torch.index_select(embedded_text_input, -2, pre_turn_sep_id)  # .int()
+        pre_turn_select_embedded[:, 0, :] = 0.0  #对第一轮来说,前一轮为0
 
         diff_embed = sep_select_embedded_ - pre_turn_select_embedded
         pointwise_embed = sep_select_embedded_ * pre_turn_select_embedded
 
-        comprehensive_embed = torch.cat((sep_select_embedded_, pre_turn_select_embedded, diff_embed, pointwise_embed),-1)
+        comprehensive_embed = torch.cat((sep_select_embedded_, pre_turn_select_embedded, diff_embed, pointwise_embed),
+                                        -1)
 
         if self.dropout:
             comprehensive_embed = self.dropout(comprehensive_embed)
@@ -586,14 +602,14 @@ class TurnSwitchClassifierInteract(nn.Module):
         logits = torch.squeeze(self._classification_layer(comprehensive_embed))
 
         # apply sep_select_embedded_mask=(bs,sep_len)
-        mask = torch.unsqueeze(mask > 0, -1).expand_as(logits)
+        mask_logits = torch.unsqueeze(mask > 0, -1).expand_as(logits)
 
-        logits_m = torch.masked_select(logits, mask)
-        label_m = torch.masked_select(label, mask)
+        logits_m = torch.masked_select(logits, mask_logits)
+        label_m = torch.masked_select(label, mask_logits)
 
-        logits_m = torch.clamp(logits_m, min=1e-4, max=1-1e-4)
+        logits_m = torch.clamp(logits_m, min=1e-4, max=1 - 1e-4)
 
-        output_dict = {}
+        output_dict = {"comprehensive_sep_embed": comprehensive_embed, "turn_sep_mask": mask,"diff_embed":diff_embed,"pointwise_embed":pointwise_embed}
 
         if label is not None and logits_m.shape[0] != 0:
             loss = self._loss(logits_m, label_m.float())
@@ -612,10 +628,79 @@ class TurnSwitchClassifierInteract(nn.Module):
             #     print(logits_m.sigmoid())
             #     print("==========")
 
+            self.counter += 1
+            if self.counter % 20 == 0:
+                print("loss turn switch 1:"+str(output_dict['loss']))
+                #print("logits turn switch: " + str(logits))
 
-            # self.counter += 1
-            # if self.counter % 200 == 0:
-            #     print(output_dict['loss'])
+        else:
+            output_dict['loss'] = 0.0
+
+        return output_dict
+
+# zhanghanchu
+@registry.register('multitask', 'turn-switch-col-classifier')
+class TurnSwitchColClassifier(nn.Module):
+    def __init__(self, input_dim, hidden_dim, vocab_path, dropout=0.1, device=None, leaky_rate=0.2, loss_scalar=8):
+        super(TurnSwitchColClassifier, self).__init__()
+        self._device = device
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+
+        self._loss = nn.BCELoss()  # 替换掉 nn.BCEWithLogitsLoss()
+
+        self.vocab = Vocab.load(vocab_path)
+        self.switch_label_size = len(self.vocab)
+
+        self.counter = 0
+
+        self.loss_scalar = loss_scalar
+
+        if dropout:
+            self.dropout = torch.nn.Dropout(dropout)
+        else:
+            self.dropout = None
+
+        self._classification_layer = torch.nn.Sequential(
+            nn.Linear(self.input_dim, self.hidden_dim),
+            nn.Tanh(),
+            nn.Linear(self.hidden_dim, self.switch_label_size),
+            nn.Sigmoid()
+        )
+
+    def create_label_t(self, turn_change_col_index, col_tab_len):
+        # id 是第几个列
+        # "dict{1:[2,4,7],2:[],3:[1,5,9]}"
+        # [[1,0],[ 2,2]
+        lable_tc = np.zeros((col_tab_len, self.switch_label_size))
+
+        for id_, label_list in turn_change_col_index.items():
+            lable_tc[[int(id_) for _ in label_list], label_list] = 1.0
+
+        lable_tc_t = torch.tensor(lable_tc).to(self._device)
+        return lable_tc_t
+
+    def forward(self, embedded_col_tab_input, label):
+        # bs=1 (bs,sep_len,dim)
+
+        if self.dropout:
+            embedded_col_tab_input = self.dropout(embedded_col_tab_input)
+
+        # (bs, sep_len, dim) -->  (sep_len, switch_label_size)
+        logits = torch.squeeze(self._classification_layer(embedded_col_tab_input))
+
+        logits_m = torch.clamp(logits, min=1e-4, max=1 - 1e-4)
+
+        output_dict = {}
+
+        if label is not None:
+            loss = self._loss(logits_m, label.float())
+            output_dict['loss'] = loss * self.loss_scalar
+
+            self.counter += 1
+            if self.counter % 20 == 0:
+                print("loss turn switch column 2: " + str(output_dict['loss']))
+                #print("logits col 2: " + str(logits))
         else:
             output_dict['loss'] = 0.0
 
@@ -628,6 +713,7 @@ class SublayerConnection(nn.Module):
     A residual connection followed by a layer norm.
     Note for code simplicity the norm is first as opposed to last.
     """
+
     def __init__(self, size, dropout):
         super(SublayerConnection, self).__init__()
         self.norm = nn.LayerNorm(size)
@@ -645,6 +731,7 @@ class HistorySublayerConnection(nn.Module):
     A residual connection followed by a layer norm.
     Note for code simplicity the norm is first as opposed to last.
     """
+
     def __init__(self, size, dropout):
         super(HistorySublayerConnection, self).__init__()
         self.norm = nn.LayerNorm(size)
@@ -652,13 +739,14 @@ class HistorySublayerConnection(nn.Module):
 
     def forward(self, x, sublayer):
         "Apply residual connection to any sublayer with the same size."
-        y, reg_loss_1, reg_loss_2 = sublayer(self.norm(x))
-        return x + self.dropout(y), reg_loss_1, reg_loss_2
+        y, loss = sublayer(self.norm(x))
+        return x + self.dropout(y), loss
 
 
 # Adapted from The Annotated Transformer
 class EncoderLayer(nn.Module):
     "Encoder is made up of self-attn and feed forward (defined below)"
+
     def __init__(self, size, self_attn, feed_forward, num_relation_kinds, dropout):
         super(EncoderLayer, self).__init__()
         self.self_attn = self_attn
@@ -681,6 +769,7 @@ class EncoderLayer(nn.Module):
 # Adapted from The Annotated Transformer
 class HistoryEncoderLayer(nn.Module):
     "Encoder is made up of self-attn and feed forward (defined below)"
+
     def __init__(self, size, self_attn, feed_forward, num_relation_kinds, dropout):
         super(HistoryEncoderLayer, self).__init__()
         self.self_attn = self_attn
@@ -697,13 +786,15 @@ class HistoryEncoderLayer(nn.Module):
         relation_k = self.relation_k_emb(relation)
         relation_v = self.relation_v_emb(relation)
 
-        x, reg_loss1, reg_loss2 = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, relation_k, relation_v, mask, sep_id, history_reg))
-        return self.sublayer[1](x, self.feed_forward), reg_loss1, reg_loss2
+        x, loss = self.sublayer[0](x,
+                                   lambda x: self.self_attn(x, x, x, relation_k, relation_v, mask, sep_id, history_reg))
+        return self.sublayer[1](x, self.feed_forward), loss
 
 
 # Adapted from The Annotated Transformer
 class PositionwiseFeedForward(nn.Module):
     "Implements FFN equation."
+
     def __init__(self, d_model, d_ff, dropout=0.1):
         super(PositionwiseFeedForward, self).__init__()
         self.w_1 = nn.Linear(d_model, d_ff)
@@ -712,4 +803,3 @@ class PositionwiseFeedForward(nn.Module):
 
     def forward(self, x):
         return self.w_2(self.dropout(F.relu(self.w_1(x))))
-

@@ -96,7 +96,7 @@ class BertAdamW(transformers.AdamW):
 
         params = [self.non_bert_param_group, self.bert_param_group]
         if "name" in kwargs: del kwargs["name"] #TODO: fix this
-        super(BertAdamW, self).__init__(params, lr=lr, betas=[0.9, 0.98], eps=1e-9, weight_decay=1.0, **kwargs)
+        super(BertAdamW, self).__init__(params, lr=lr, betas=[0.9, 0.98], eps=1e-9, **kwargs)
 
 @registry.register('lr_scheduler', 'bert_warmup_polynomial_group')
 @attr.s

@@ -1,9 +1,9 @@
 {
-    local exp_id = 999,
+    local exp_id = 2,
     logdir: "logdir/sparc_tcs_bart_run_%d" %exp_id,
     model_config: "configs/sparc_gap_turn_switch/gap-bart.jsonnet",
     model_config_args: {
-        bs: 12,
+        bs: 7,
         num_batch_accumulated: 2,
         bart_version: "facebook/bart-large",
         summarize_header: "avg",

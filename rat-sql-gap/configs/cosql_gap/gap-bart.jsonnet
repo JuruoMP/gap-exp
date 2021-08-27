@@ -24,7 +24,7 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
             question_encoder:: null,
             column_encoder:: null,
             table_encoder:: null,
-            dropout: 0.4,
+            dropout:: null,
             update_config+:  {
                 name: 'relational_transformer',
                 num_layers: args.num_layers,
@@ -67,7 +67,7 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
         },
         decoder+: {
             name: 'NL2Code',
-            dropout: 0.4,
+            dropout: 0.20687225956012834,
             desc_attn: 'mha',
             enc_recurrent_size: enc_size,
             recurrent_size : args.decoder_hidden_size,

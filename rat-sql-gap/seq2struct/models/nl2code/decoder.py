@@ -28,7 +28,6 @@ from seq2struct.utils import serialization
 from seq2struct.models.nl2code.tree_traversal import TreeTraversal
 from seq2struct.models.nl2code.train_tree_traversal import TrainTreeTraversal
 from seq2struct.models.nl2code.infer_tree_traversal import InferenceTreeTraversal
-from global_config import global_config
 
 
 def lstm_init(device, num_layers, hidden_size, *batch_sizes):
@@ -84,7 +83,6 @@ def get_field_presence_info(ast_wrapper, node, field_infos):
 class NL2CodeDecoderPreprocItem:
     tree = attr.ib()
     orig_code = attr.ib()
-    sql_str = attr.ib()
 
 
 class NL2CodeDecoderPreproc(abstract_preproc.AbstractPreproc):
@@ -134,9 +132,7 @@ class NL2CodeDecoderPreproc(abstract_preproc.AbstractPreproc):
         self.items[section].append(
             NL2CodeDecoderPreprocItem(
                 tree=root,
-                orig_code=item.code,
-                sql_str=item.sql_str,
-            ))
+                orig_code=item.code))
     
     def clear_items(self):
         self.items = collections.defaultdict(list)
@@ -1119,15 +1115,9 @@ class NL2CodeHistoryDecoder(torch.nn.Module):
 
         if self.use_align_loss:
             align_loss = self.compute_align_loss(desc_enc, example)
-            return mle_loss + \
-                   global_config.reg_loss_weight * (align_loss + (desc_enc.reg_loss[0] + desc_enc.reg_loss[1])) + \
-                   global_config.tc_loss_weight * desc_enc.tc_loss, \
-                   desc_enc.reg_loss
+            return mle_loss + align_loss + desc_enc.tc_loss
         # loss combine
-        return mle_loss + \
-               global_config.reg_loss_weight * (desc_enc.reg_loss[0] + desc_enc.reg_loss[1]) + \
-               global_config.tc_loss_weight * desc_enc.tc_loss, \
-               desc_enc.reg_loss
+        return mle_loss + desc_enc.tc_loss
 
     def compute_loss_from_all_ordering(self, enc_input, example, desc_enc, debug):
         def get_permutations(node):
@@ -1324,6 +1314,9 @@ class NL2CodeHistoryDecoder(torch.nn.Module):
         # node_type_emb shape: batch (=1) x emb_size
         node_type_emb = self.node_type_embedding(
             self._index(self.node_type_vocab, node_type))
+
+        #desc_context-w*prev_action_emb
+
 
         state_input = torch.cat(
             (

@@ -24,11 +24,11 @@ class Preprocessor:
             #     continue
             data = registry.construct('dataset', self.config['data'][section])
             for item in tqdm.tqdm(data, desc=section, dynamic_ncols=True):
-                if True:#try:
+                try:
                     to_add, validation_info = self.model_preproc.validate_item(item, section)
                     if to_add:
                         self.model_preproc.add_item(item, section, validation_info)
-                else:#except:
+                except:
                     print("======== Error parsing: {}".format(" ".join(item.text)))
         self.model_preproc.save()
 

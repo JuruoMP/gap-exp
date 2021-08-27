@@ -1,5 +1,5 @@
 local _0428_base = import 'nl2code-base.libsonnet';
-local _data_path = 'data/sparc-bart-aug/';
+local _data_path = 'data/sparc-bart-final/';
 local _output_from = true;
 local _fs = 2;
 

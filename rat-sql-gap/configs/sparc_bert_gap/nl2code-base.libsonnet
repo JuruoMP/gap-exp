@@ -19,7 +19,7 @@ function(output_from, data_path='data/sparc-20190205/') {
     data: {
         train: {
             name: 'spider',
-            paths: [PREFIX + 'train_bert_sparc.json'],
+            paths: [PREFIX + 'train_sparc_final.json'],
             tables_paths: [
               PREFIX + 'tables.json',
             ],
@@ -27,7 +27,7 @@ function(output_from, data_path='data/sparc-20190205/') {
         },
         val: {
             name: 'spider',
-            paths: [PREFIX + 'dev_bert_sparc.json'],
+            paths: [PREFIX + 'dev_sparc_final.json'],
             tables_paths: [PREFIX + 'tables.json'],
             db_path: PREFIX + 'database',
         },
