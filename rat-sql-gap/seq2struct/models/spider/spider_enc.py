@@ -685,14 +685,27 @@ class SpiderEncoderBertPreproc(SpiderEncoderV2Preproc):
 
         self.tokenizer = BertTokenizer.from_pretrained(os.getcwd() + "/" + bert_version)
         self.tokenizer.add_special_tokens({"additional_special_tokens": ["<col>"]})
+        self.tokenizer.add_special_tokens({"additional_special_tokens": ["<#>"]})
         # TODO: should get types from the data
         column_types = ["text", "number", "time", "boolean", "others"]
         self.tokenizer.add_tokens([f"<type: {t}>" for t in column_types])
 
     def _tokenize(self, presplit, unsplit):
         if self.tokenizer:
-            toks = self.tokenizer.tokenize(unsplit)
+            texts = re.split(r"<#>", unsplit.replace("'", " ' ").replace('"', ' " '))
+            tokens_list = []
+            for tt in texts:
+                tokens_list += nltk.word_tokenize(tt)
+                tokens_list.append("<#>")
+            tokens_list = tokens_list[0:-1]
+            tokens = tokens_list
+            toks = []
+            for token in tokens:
+                toks.extend(self.tokenizer.tokenize(token))
+
+            # toks = self.tokenizer.tokenize(unsplit)
             return toks
+        print("no tokenizer")
         return presplit
 
     def add_item(self, item, section, validation_info):
@@ -767,6 +780,7 @@ class SpiderEncoderBertPreproc(SpiderEncoderV2Preproc):
 
     def load(self):
         self.tokenizer = BertTokenizer.from_pretrained(self.data_dir)
+        self.tokenizer.add_special_tokens({"additional_special_tokens": ["<#>"]})
 
 
 @registry.register('encoder', 'spider-bert')
