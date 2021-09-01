@@ -1,5 +1,7 @@
+import math
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from seq2struct.utils import registry
 from seq2struct.models import transformer
@@ -97,7 +99,7 @@ class BahdanauAttention(Attention):
 
 # Adapted from The Annotated Transformers
 class MultiHeadedAttention(torch.nn.Module):
-    def __init__(self, h, query_size, value_size, dropout=0.1):
+    def __init__(self, h, query_size, value_size, dropout=0.1, range_attention=False):
         super().__init__()
         assert query_size % h == 0
         assert value_size % h == 0
@@ -115,8 +117,9 @@ class MultiHeadedAttention(torch.nn.Module):
 
         self.attn = None
         self.dropout = torch.nn.Dropout(p=dropout)
+        self.range_attention = range_attention
         
-    def forward(self, query, values, attn_mask=None):
+    def forward(self, query, values, attn_mask=None, sep_id=None):
         "Implements Figure 2"
         if attn_mask is not None:
             # Same mask applied to all h heads.
@@ -130,11 +133,44 @@ class MultiHeadedAttention(torch.nn.Module):
         
         # 2) Apply attention on all the projected vectors in batch. 
         # x, self.attn = transformer.sparse_attention(
-        x, self.attn = transformer.attention(
-                query, keys, values, mask=attn_mask, dropout=self.dropout)
+        if not self.range_attention:
+            x, self.attn = transformer.attention(
+                    query, keys, values, mask=attn_mask, dropout=self.dropout)
+        else:
+            x, self.attn = range_attention(
+                query, keys, values, sep_id=sep_id, mask=attn_mask, dropout=self.dropout)
         
         # 3) "Concat" using a view and apply a final linear. 
         x = x.transpose(1, 2).contiguous() \
              .view(nbatches, -1, self.h * self.d_k)
         x = x.squeeze(1)
         return self.linears[-1](x), self.attn
+
+
+def range_attention(query, key, value, sep_id=None, mask=None, dropout=None):
+    "Compute 'Scaled Dot Product Attention'"
+    d_k = query.size(-1)
+    scores = torch.matmul(query, key.transpose(-2, -1)) \
+             / math.sqrt(d_k)
+
+    if sep_id is not \
+            None:
+        span_positions = []
+        for i in range(len(sep_id) - 1):
+            span_positions.append((sep_id[i], sep_id[i + 1]))
+        span_positions.append((sep_id[-1], query.size(-1)))
+        k_sep = key[:, :, sep_id]
+        q_sep = k_sep[:, :, -1:]
+        sep_attn_score = torch.matmul(q_sep, k_sep.transpose(-2, -1)) / math.sqrt(d_k)
+        sep_attn = F.softmax(sep_attn_score, dim=-1)
+        for i in range(sep_attn.size(-1)):
+            scores[:, :, :, span_positions[i][0]:span_positions[i][1]] = \
+                scores[:, :, :, span_positions[i][0]:span_positions[i][1]] + sep_attn[:, :, :, i].unsqueeze(-1)
+
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, -1e9)
+    p_attn = F.softmax(scores, dim=-1)
+    if dropout is not None:
+        p_attn = dropout(p_attn)
+    # return torch.matmul(p_attn, value), scores.squeeze(1).squeeze(1)
+    return torch.matmul(p_attn, value), p_attn

@@ -1,14 +1,13 @@
 {
     local exp_id = 1,
-    logdir: "logdir/sparc_bert_history_run_%d" %exp_id,
-    model_config: "configs/sparc_bert_gap_history/gap-bert.jsonnet",
+    logdir: "logdir/cosql_ccs_bart_run_%d" %exp_id,
+    model_config: "configs/cosql_gap_ccs_ra/gap-bart.jsonnet",
     model_config_args: {
         bs: 12,
         num_batch_accumulated: 2,
-        bert_version: "bert-large-uncased",
+        bart_version: "facebook/bart-large",
         summarize_header: "avg",
         use_column_type: false,
-        max_steps: 101000,
         num_layers: 8,
         lr: 1e-4,
         bert_lr: 1e-5,
@@ -24,10 +23,10 @@
         clause_order: null, # strings like "SWGOIF", it will be prioriotized over end_with_from
     },
 
-    eval_name: "sparc_bert_history_run_%d_%s_%d" % [exp_id, self.eval_use_heuristic, self.eval_beam_size],
+    eval_name: "cosql_ccs_bart_run_%d_%s_%d" % [exp_id, self.eval_use_heuristic, self.eval_beam_size],
     eval_output: "ie_dirs",
     eval_beam_size: 1,
     eval_use_heuristic: true,
-    eval_steps: [ 1000 * x + 100 for x in std.range(0, 100)]+[101000],
+    eval_steps: [30000, 30500, 31000, 31500, 32000, 32500, 33000, 33500, 34000, 34500, 35000, 35500, 36000, 36500, 37000, 37500, 38000, 38500, 39000, 39500, 40000],
     eval_section: "val",
 }

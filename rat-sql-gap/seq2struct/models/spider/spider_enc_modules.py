@@ -904,16 +904,16 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
         self.turn_switch_col_config = turn_switch_col_config
 
         self.encode_num_layers = num_layers
-        self.turn_switch_classifier = registry.instantiate(registry.lookup('multitask', turn_switch_config['model']),
-                                                           config=turn_switch_config)
+
+        if self.turn_switch_config["loss_scalar"] <= 0:
+            self.turn_switch_classifier = None
+        else:
+            self.turn_switch_classifier = registry.instantiate(registry.lookup('multitask', turn_switch_config['model']),
+                                                               config=turn_switch_config)
+
         self.turn_switch_col_classifier = registry.instantiate(
             registry.lookup('multitask', turn_switch_col_config['model']),
             config=turn_switch_col_config)
-        self.dynamic_loss_weighter = None
-        if turn_switch_config.get("use_dynamic_loss_weight", 0) or turn_switch_col_config.get("use_dynamic_loss_weight",
-                                                                                              0):
-            self.dynamic_loss_weighter = registry.instantiate(registry.lookup('multitask', "dynamic_loss_weight"),
-                                                              config=turn_switch_config)
 
         print("reg_loss_scalar={}".format(self.turn_switch_config["reg_loss_scalar"]))
         if self.turn_switch_config["reg_loss_scalar"] <= 0:
@@ -993,12 +993,14 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
 
         # 这里添加turn switch 标签 bs=1 (1,turn_len,num_labels)
         # zhanghanchu
-        lable_tc_t = self.turn_switch_classifier.create_label_t(desc['turn_change_index'])
-        tc_mask_t = self.turn_switch_classifier.create_mask_t(desc['turn_change_index'])
-        sep_id_t = torch.cat((sep_id, torch.zeros(self.turn_switch_classifier.turn_len - len(sep_id)).to(self._device)))
-        turn_change_output = self.turn_switch_classifier(enc_new, sep_id=sep_id_t, mask=tc_mask_t, label=lable_tc_t)
+        if self.turn_switch_classifier:
+            lable_tc_t = self.turn_switch_classifier.create_label_t(desc['turn_change_index'])
+            tc_mask_t = self.turn_switch_classifier.create_mask_t(desc['turn_change_index'])
+            sep_id_t = torch.cat((sep_id, torch.zeros(self.turn_switch_classifier.turn_len - len(sep_id)).to(self._device)))
+            turn_change_output = self.turn_switch_classifier(enc_new, sep_id=sep_id_t, mask=tc_mask_t, label=lable_tc_t)
+        else:
+            turn_change_output = {'loss': 0}
         turn_change_loss = turn_change_output['loss']
-        comprehensive_sep_embed = turn_change_output['comprehensive_sep_embed']
 
         # Split updated_enc again
         c_base = q_enc.shape[0]
@@ -1013,7 +1015,7 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
 
             last_sep_pointwise_embed = turn_change_output['pointwise_embed'][:, len(sep_id) - 1, :]  # [bs, 1, 1024]
 
-            last_sep_embed = torch.cat((last_sep_diff_embed,last_sep_pointwise_embed),-1).unsqueeze(-2)
+            last_sep_embed = torch.cat((last_sep_diff_embed, last_sep_pointwise_embed), -1).unsqueeze(-2)
 
             col_tab_embed = enc_new[:, c_base:]
             last_sep_embed_expand = last_sep_embed.expand(last_sep_embed.shape[0], col_tab_embed.shape[1], last_sep_embed.shape[-1])
@@ -1026,14 +1028,7 @@ class RelationalHistoryTransformerUpdate(torch.nn.Module):
                                                                     c_enc.shape[0] + t_enc.shape[0])
         turn_change_col_loss = self.turn_switch_col_classifier(col_embed_large, lable_tc_t)['loss']
 
-        # 在这里加入门控 zhanghanchu
-        # h = sep_embed[-1]
-        # h*W ==> [0.7] turn-switch 的loss的权重
-        if self.dynamic_loss_weighter:
-            tcs_loss_weight = self.dynamic_loss_weighter(comprehensive_sep_embed[:, -1, :])
-            turn_change_loss = tcs_loss_weight[0] * turn_change_loss + tcs_loss_weight[1] * turn_change_col_loss
-        else:
-            turn_change_loss = turn_change_loss + turn_change_col_loss
+        turn_change_loss = turn_change_loss + turn_change_col_loss
 
         m2c_align_mat = self.align_attn(enc_new, enc_new[:, c_base:t_base], \
                                         enc_new[:, c_base:t_base], relations_t[:, c_base:t_base])

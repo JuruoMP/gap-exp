@@ -1,7 +1,7 @@
 {
     local exp_id = 1,
-    logdir: "logdir/sparc_bert_history_run_%d" %exp_id,
-    model_config: "configs/sparc_bert_gap_history/gap-bert.jsonnet",
+    logdir: "logdir/sparc_bert_tcs_run_%d" %exp_id,
+    model_config: "configs/sparc_bert_turn_switch/gap-bert.jsonnet",
     model_config_args: {
         bs: 12,
         num_batch_accumulated: 2,
@@ -24,7 +24,7 @@
         clause_order: null, # strings like "SWGOIF", it will be prioriotized over end_with_from
     },
 
-    eval_name: "sparc_bert_history_run_%d_%s_%d" % [exp_id, self.eval_use_heuristic, self.eval_beam_size],
+    eval_name: "sparc_bert_tcs_run_%d_%s_%d" % [exp_id, self.eval_use_heuristic, self.eval_beam_size],
     eval_output: "ie_dirs",
     eval_beam_size: 1,
     eval_use_heuristic: true,

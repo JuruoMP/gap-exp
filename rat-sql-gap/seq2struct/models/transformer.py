@@ -538,7 +538,7 @@ class TurnSwitchDynamicLossWeight(nn.Module):
 @registry.register('multitask', 'turn-switch-classifier-interact')
 class TurnSwitchClassifierInteract(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, vocab_path, dropout=0.1, device=None, leaky_rate=0.2, loss_scalar=4, mid_layer_activator='relu',max_turn_len=6):
+    def __init__(self, input_dim, hidden_dim, vocab_path, dropout=0.1, device=None, leaky_rate=0.2, loss_scalar=4, mid_layer_activator='relu',max_turn_len=6, report_loss_every_n=20):
         super(TurnSwitchClassifierInteract, self).__init__()
         self.turn_len = max_turn_len
         self._device = device
@@ -558,6 +558,8 @@ class TurnSwitchClassifierInteract(nn.Module):
             self.dropout = torch.nn.Dropout(dropout)
         else:
             self.dropout = None
+
+        self.report_loss_every_n = report_loss_every_n
         print("mid_layer_activator:{}".format(mid_layer_activator))
         self._classification_layer = torch.nn.Sequential(
             nn.Linear(self.input_dim * 4, self.hidden_dim),
@@ -629,8 +631,8 @@ class TurnSwitchClassifierInteract(nn.Module):
             #     print("==========")
 
             self.counter += 1
-            if self.counter % 20 == 0:
-                print("loss turn switch 1:"+str(output_dict['loss']))
+            # if self.counter % self.report_loss_every_n == 0:
+            #     print("loss **********************************AAAA***:"+str(output_dict['loss']))
                 #print("logits turn switch: " + str(logits))
 
         else:
@@ -641,7 +643,7 @@ class TurnSwitchClassifierInteract(nn.Module):
 # zhanghanchu
 @registry.register('multitask', 'turn-switch-col-classifier')
 class TurnSwitchColClassifier(nn.Module):
-    def __init__(self, input_dim, hidden_dim, vocab_path, dropout=0.1, device=None, leaky_rate=0.2, loss_scalar=8):
+    def __init__(self, input_dim, hidden_dim, vocab_path, dropout=0.1, device=None, leaky_rate=0.2, loss_scalar=8, report_loss_every_n=20):
         super(TurnSwitchColClassifier, self).__init__()
         self._device = device
         self.input_dim = input_dim
@@ -660,6 +662,8 @@ class TurnSwitchColClassifier(nn.Module):
             self.dropout = torch.nn.Dropout(dropout)
         else:
             self.dropout = None
+
+        self.report_loss_every_n = report_loss_every_n
 
         self._classification_layer = torch.nn.Sequential(
             nn.Linear(self.input_dim, self.hidden_dim),
@@ -698,9 +702,8 @@ class TurnSwitchColClassifier(nn.Module):
             output_dict['loss'] = loss * self.loss_scalar
 
             self.counter += 1
-            if self.counter % 20 == 0:
-                print("loss turn switch column 2: " + str(output_dict['loss']))
-                #print("logits col 2: " + str(logits))
+            # if self.counter % self.report_loss_every_n == 0:
+            #     print("loss BBBB: " + str(output_dict['loss']))
         else:
             output_dict['loss'] = 0.0
 

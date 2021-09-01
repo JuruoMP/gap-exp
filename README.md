@@ -97,22 +97,3 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 ## License
 
 This project is licensed under the Apache-2.0 License.
-
-
-## Sparc and CoSQL settings
-Download and run SparC
-```bash
-gdown --id 13Abvu5SUMSP3SJM-ZIj66mOkeyAquR73
-unzip sparc.zip
-ln -s $(pwd)/sparc/database data/sparc-bart-tcs/database
-python run.py train experiments/sparc-tcs-configs/gap-run.jsonnet
-```
-
-Download and run CoSQL
-```bash
-gdown --id 14x6lsWqlu6gR-aYxa6cemslDN3qT3zxP
-unzip cosql_dataset.zip
-ln -s $(pwd)/cosql_dataset/database data/cosql-bart-tcs/database
-python run.py train experiments/cosql-tcs-configs/gap-run.jsonnet
-```
-

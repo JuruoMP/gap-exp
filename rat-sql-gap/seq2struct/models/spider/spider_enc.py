@@ -60,6 +60,8 @@ class HistorySpiderEncoderState:
     reg_loss = attr.ib()
     tc_loss = attr.ib()
 
+    info = attr.ib()
+
     def find_word_occurrences(self, word):
         return [i for i, w in enumerate(self.words) if w == word]
 
@@ -1276,7 +1278,8 @@ class SpiderEncoderHistoryBert(torch.nn.Module):
                 },
                 m2c_align_mat=align_mat_item[0],
                 m2t_align_mat=align_mat_item[1],
-                reg_loss=_loss
+                reg_loss=_loss,
+                info={'sep_id': sep_id}
             ))
         return result
 
@@ -1982,9 +1985,6 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
 
         self.bert_model = BartModel.from_pretrained(bart_version)
         print(next(self.bert_model.encoder.parameters()))
-        self.max_segment_id = update_config['max_segment_id']
-        if self.max_segment_id > 0:
-            self.segment_embedding = torch.nn.Embedding(self.max_segment_id, self.base_enc_hidden_size)
 
         def replace_model_with_pretrained(model, path, prefix):
             restore_state_dict = torch.load(
@@ -2011,7 +2011,6 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
 
     def forward(self, descs):
         batch_token_lists = []
-        batch_segment_id_lists = []
         batch_id_to_retrieve_question = []
         batch_id_to_retrieve_column = []
         batch_id_to_retrieve_table = []
@@ -2030,20 +2029,6 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
 
             token_list = qs + [c for col in cols for c in col] + \
                          [t for tab in tabs for t in tab]
-
-            # segment embedding
-            segment_ids, cur_id = [], 1
-            for tok in qs:
-                if tok == '<s>' or tok == '</s>':
-                    segment_ids.append(0)
-                elif tok == '<#>':
-                    segment_ids.append(0)  # todo: set 0 or cur_id for separator '<#>'?
-                    cur_id += 1
-                else:
-                    segment_ids.append(cur_id)
-            segment_ids += [0 for _ in range(len(token_list) - len(segment_ids))]
-            batch_segment_id_lists.append(segment_ids)
-
             assert self.check_bert_seq(token_list)
             if len(token_list) > 2048:
                 # if len(token_list) > 1024:
@@ -2092,14 +2077,6 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
                                       attention_mask=att_masks_tensor)[0]
 
         enc_output = bert_output
-
-        if self.max_segment_id > 0:
-            padded_segment_id_lists = self.pad_segment_for_bert_batch(batch_segment_id_lists)
-            segment_tensor = torch.LongTensor(padded_segment_id_lists).to(self._device)
-            assert max(max(padded_segment_id_lists)) < self.max_segment_id, \
-                "Max segment id is too small to represent all turns"
-            segment_embed = self.segment_embedding(segment_tensor)
-            enc_output += segment_embed
 
         column_pointer_maps = [
             {
@@ -2196,7 +2173,8 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
                 m2c_align_mat=align_mat_item[0],
                 m2t_align_mat=align_mat_item[1],
                 reg_loss=_loss,
-                tc_loss=_tc_loss  # turn switch loss
+                tc_loss=_tc_loss,  # turn switch loss
+                info={'sep_id': sep_id}
             ))
         return result
 
@@ -2266,7 +2244,3 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
             _tok_type_list = [0] * (first_sep_id + 1) + [1] * (max_len - first_sep_id - 1)
             tok_type_lists.append(_tok_type_list)
         return toks_ids, att_masks, tok_type_lists
-
-    def pad_segment_for_bert_batch(self, segment_id_lists):
-        max_len = max(len(x) for x in segment_id_lists)
-        return [x + [0] * (max_len - len(x)) for x in segment_id_lists]

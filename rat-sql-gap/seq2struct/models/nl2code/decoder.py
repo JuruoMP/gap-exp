@@ -923,6 +923,7 @@ class NL2CodeHistoryDecoder(torch.nn.Module):
             sup_att=None,
             use_align_mat=False,
             use_align_loss=False,
+            use_tc_loss=False,
             enumerate_order=False,
             loss_type="softmax"):
         super().__init__()
@@ -939,6 +940,7 @@ class NL2CodeHistoryDecoder(torch.nn.Module):
         self.rules_index = {v: idx for idx, v in enumerate(self.preproc.all_rules)}
         self.use_align_mat = use_align_mat
         self.use_align_loss = use_align_loss
+        self.use_tc_loss = use_tc_loss
         self.enumerate_order = enumerate_order
 
         if use_align_mat:
@@ -980,7 +982,8 @@ class NL2CodeHistoryDecoder(torch.nn.Module):
             self.desc_attn = attention.MultiHeadedAttention(
                 h=8,
                 query_size=self.recurrent_size,
-                value_size=self.enc_recurrent_size)
+                value_size=self.enc_recurrent_size,
+                range_attention=True)
         elif desc_attn == 'mha-1h':
             self.desc_attn = attention.MultiHeadedAttention(
                 h=1,
@@ -1112,12 +1115,14 @@ class NL2CodeHistoryDecoder(torch.nn.Module):
             mle_loss = self.compute_mle_loss(enc_input, example, desc_enc, debug)
         else:
             mle_loss = self.compute_loss_from_all_ordering(enc_input, example, desc_enc, debug)
+        loss = mle_loss
 
         if self.use_align_loss:
             align_loss = self.compute_align_loss(desc_enc, example)
-            return mle_loss + align_loss + desc_enc.tc_loss
-        # loss combine
-        return mle_loss + desc_enc.tc_loss
+            loss = loss + align_loss
+        if self.use_tc_loss:
+            loss = loss + desc_enc.tc_loss
+        return loss
 
     def compute_loss_from_all_ordering(self, enc_input, example, desc_enc, debug):
         def get_permutations(node):
@@ -1286,7 +1291,7 @@ class NL2CodeHistoryDecoder(torch.nn.Module):
         # - c_n: batch (=1) x emb_size
         query = prev_state[0]
         if self.attn_type != 'sep':
-            return self.desc_attn(query, desc_enc.memory, attn_mask=None)
+            return self.desc_attn(query, desc_enc.memory, attn_mask=None, sep_id=desc_enc.info['sep_id'])
         else:
             question_context, question_attention_logits = self.question_attn(query, desc_enc.question_memory)
             schema_context, schema_attention_logits = self.schema_attn(query, desc_enc.schema_memory)

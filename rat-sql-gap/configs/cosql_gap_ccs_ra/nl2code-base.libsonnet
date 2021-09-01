@@ -19,7 +19,7 @@ function(output_from, data_path='data/sparc-20190205/') {
     data: {
         train: {
             name: 'spider',
-            paths: [PREFIX + 'train_bert_sparc.json'],
+            paths: [PREFIX + 'train.json'],
             tables_paths: [
               PREFIX + 'tables.json',
             ],
@@ -27,7 +27,7 @@ function(output_from, data_path='data/sparc-20190205/') {
         },
         val: {
             name: 'spider',
-            paths: [PREFIX + 'dev_bert_sparc.json'],
+            paths: [PREFIX + 'dev.json'],
             tables_paths: [PREFIX + 'tables.json'],
             db_path: PREFIX + 'database',
         },
@@ -84,12 +84,12 @@ function(output_from, data_path='data/sparc-20190205/') {
         batch_size: 10,
         eval_batch_size: 50,
 
-        keep_every_n: 5000,
+        keep_every_n: 1000,
         eval_every_n: 1000000,
         save_every_n: 500,
         report_every_n: 100,
 
-        max_steps: 101000,
+        max_steps: 41000,
         num_eval_items: 50,
     },
     optimizer: {

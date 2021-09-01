@@ -1,5 +1,5 @@
 local _0428_base = import 'nl2code-base.libsonnet';
-local _data_path = 'data/sparc-bert/';
+local _data_path = 'data/cosql-bart-CCS/';
 local _output_from = true;
 local _fs = 2;
 
@@ -11,7 +11,7 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
     local base_bert_enc_size = 1024,
     local enc_size =  base_bert_enc_size,
 
-    model_name: 'bs=sparc-bert-history,%(bs)d,lr=%(lr)s,bert_lr=%(bert_lr)s,end_lr=%(end_lr)s,att=%(att)d' % (args + {
+    model_name: 'bs=cosql_history,%(bs)d,lr=%(lr)s,bert_lr=%(bert_lr)s,end_lr=%(end_lr)s,att=%(att)d' % (args + {
         lr: lr_s,
         bert_lr: bert_lr_s,
         end_lr: end_lr_s,
@@ -19,7 +19,7 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
 
     model+: {
         encoder+: {
-            name: 'spider-history-bert',
+            name: 'spider-history-bart',
             batch_encs_update:: null,
             question_encoder:: null,
             column_encoder:: null,
@@ -34,20 +34,22 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
             },
             summarize_header: args.summarize_header,
             use_column_type: args.use_column_type,
-            bert_version: args.bert_version,
+            bart_version: args.bart_version,
             top_k_learnable:: null,
             word_emb_size:: null,
             turn_switch_config+:  {
-                        model:'turn-switch-classifier-interact',
-                        vocab_path: _data_path + "turn_switch_label_vocab.json",
-                        reg_loss_scalar:1,
-                        hidden_dim: 1024,
-                        dropout: 0.10,
-                        leaky_rate:0.20,
-                        loss_scalar:4.0,
-                        mid_layer_activator:'relu',
-                        use_dynamic_loss_weight:0
-                },
+                    reg_loss_scalar:0,
+                    loss_scalar:0.0,
+
+                    model:'turn-switch-classifier-interact',
+                    vocab_path: _data_path + "turn_switch_label_vocab.json",
+                    hidden_dim: 1024,
+                    dropout: 0.10,
+                    leaky_rate:0.20,
+                    mid_layer_activator:'tanh',
+                    max_turn_len:10,
+                    report_loss_every_n:200
+            },
             turn_switch_col_config+:  {
                     model:'turn-switch-col-classifier',
                     vocab_path: _data_path + "turn_switch_col_vocab.json",
@@ -55,8 +57,9 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
                     dropout: 0.10,
                     loss_scalar:4.0,
                     use_dynamic_loss_weight:0,
-                    use_pre_turn_diff:0
-            }
+                    use_pre_turn_diff:0,
+                    report_loss_every_n:200
+            },
         },
         encoder_preproc+: {
             word_emb:: null,
@@ -66,9 +69,9 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
             compute_sc_link: args.sc_link,
             compute_cv_link: args.cv_link,
             fix_issue_16_primary_keys: true,
-            bert_version: args.bert_version,
+            bart_version: args.bart_version,
             count_tokens_in_word_emb_for_vocab:: null,
-            save_path: _data_path + 'sparc,nl2code-1115,output_from=%s,fs=%d,emb=bert,cvlink' % [_output_from, _fs],
+            save_path: _data_path + 'cosql,nl2code-1115,output_from=%s,fs=%d,emb=bart,cvlink' % [_output_from, _fs],
         },
         decoder_preproc+: {
             grammar+: {
@@ -77,13 +80,13 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
                 infer_from_conditions: true,
                 factorize_sketch: _fs,
             },
-            save_path: _data_path + 'sparc,nl2code-1115,output_from=%s,fs=%d,emb=bert,cvlink' % [_output_from, _fs],
+            save_path: _data_path + 'cosql,nl2code-1115,output_from=%s,fs=%d,emb=bart,cvlink' % [_output_from, _fs],
 
             compute_sc_link:: null,
             compute_cv_link:: null,
             db_path:: null,
             fix_issue_16_primary_keys:: null,
-            bert_version:: null,
+            bart_version:: null,
         },
         decoder+: {
             name: 'NL2Code-history',
