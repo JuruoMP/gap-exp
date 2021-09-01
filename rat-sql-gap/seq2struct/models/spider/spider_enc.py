@@ -685,7 +685,7 @@ class SpiderEncoderBertPreproc(SpiderEncoderV2Preproc):
         self.counted_db_ids = set()
         self.preprocessed_schemas = {}
 
-        self.tokenizer = BertTokenizer.from_pretrained(os.getcwd() + "/" + bert_version)
+        self.tokenizer = BertTokenizer.from_pretrained(bert_version)
         self.tokenizer.add_special_tokens({"additional_special_tokens": ["<col>"]})
         self.tokenizer.add_special_tokens({"additional_special_tokens": ["<#>"]})
         # TODO: should get types from the data
@@ -828,7 +828,7 @@ class SpiderEncoderBert(torch.nn.Module):
             sc_link=True,
         )
 
-        self.bert_model = BertModel.from_pretrained(os.getcwd() + "/" + bert_version)
+        self.bert_model = BertModel.from_pretrained(bert_version)
         self.tokenizer = self.preproc.tokenizer
         self.bert_model.resize_token_embeddings(len(self.tokenizer))  # several tokens added
 
@@ -1099,7 +1099,7 @@ class SpiderEncoderHistoryBert(torch.nn.Module):
             sc_link=True,
         )
 
-        self.bert_model = BertModel.from_pretrained(os.getcwd() + "/" + bert_version)
+        self.bert_model = BertModel.from_pretrained(bert_version)
         self.tokenizer = self.preproc.tokenizer
         self.bert_model.resize_token_embeddings(len(self.tokenizer))  # several tokens added
 
@@ -1527,7 +1527,7 @@ class SpiderEncoderBartPreproc(SpiderEncoderV2Preproc):
         self.counted_db_ids = set()
         self.preprocessed_schemas = {}
         # liyutian
-        self.tokenizer = BartTokenizer.from_pretrained(os.getcwd() + "/" + bart_version)
+        self.tokenizer = BartTokenizer.from_pretrained(bart_version)
         self.tokenizer.add_special_tokens({"additional_special_tokens": ["<#>"]})
 
         column_types = ["text", "number", "time", "boolean", "others"]
