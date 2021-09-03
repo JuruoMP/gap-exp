@@ -554,12 +554,12 @@ def process_turn_switch(train_sparc_final):
             print("")
         question = turn['question']
 
-        if '<#>' in question:
+        seprators = re.findall("<#>", question)
+        if len(seprators) > 1:
             prev_turn = train_sparc_final[i - 1]
             print(prev_turn['query'])
         else:
             prev_turn = {'sql': None}
-
 
         print(turn['query'])
 

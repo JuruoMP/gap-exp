@@ -459,8 +459,8 @@ def process_turn_switch(train_sparc_final):
     for i, turn in enumerate(train_sparc_final):
 
         question = turn['question']
-
-        if '<#>' in question:
+        seprators = re.findall("<#>", question)
+        if len(seprators)>1:
             change_list_all = []
             prev_turn = train_sparc_final[i - 1]
 
