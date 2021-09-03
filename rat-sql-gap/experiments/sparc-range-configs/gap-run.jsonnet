@@ -3,7 +3,7 @@
     logdir: "logdir/sparc_range_bart_run_%d" %exp_id,
     model_config: "configs/sparc_gap_range/gap-bart.jsonnet",
     model_config_args: {
-        bs: 6,
+        bs: 12,
         num_batch_accumulated: 2,
         bart_version: "facebook/bart-large",
         summarize_header: "avg",
