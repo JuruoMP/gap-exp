@@ -189,6 +189,46 @@ def attention_with_relations(query, key, value, relation_k, relation_v, mask=Non
     return relative_attention_values(p_attn, value, relation_v), p_attn_orig
 
 
+def range_relative_attention_logits(query, key, relation, sep_id):
+    bs, n_head, l, d = query.size()
+    turn_pos = []
+    for i in range(len(sep_id) - 1):
+        turn_pos.append((sep_id[i], sep_id[i + 1]))
+    turn_pos.append((sep_id[-1], query.size(-2)))
+    query_sep_vecs = query[:, :, sep_id]
+    key_sep_vecs = key[:, :, sep_id]
+    sep_attention = torch.matmul(query_sep_vecs, key_sep_vecs.transpose(-2, -1))
+    range_attention = torch.zeros((bs, n_head, l, l)).to(query.device)
+    for i in range(len(sep_id)):
+        turn1_st, turn1_ed = turn_pos[i]
+        for j in range(len(sep_id)):
+            turn2_st, turn2_ed = turn_pos[j]
+            if j < i:
+                range_attention[:, :, turn1_st:turn1_ed, turn2_st:turn2_ed] = -np.inf
+            else:
+                range_attention[:, :, turn1_st:turn1_ed, turn2_st:turn2_ed] = \
+                    sep_attention[:, :, i, j].view(query.size(0), query.size(1), 1, 1)
+    qk_matmul = torch.matmul(query, key.transpose(-2, -1))
+    q_t = query.permute(0, 2, 1, 3)
+    r_t = relation.transpose(-2, -1)
+    q_tr_t_matmul = torch.matmul(q_t, r_t)
+    q_tr_tmatmul_t = q_tr_t_matmul.permute(0, 2, 1, 3)
+    attention_score = (qk_matmul + q_tr_tmatmul_t) / math.sqrt(query.shape[-1])
+    return attention_score + range_attention
+
+
+def range_attention_with_relations(query, key, value, relation_k, relation_v, sep_id, mask=None, dropout=None):
+    "Compute 'Scaled Dot Product Attention'"
+    d_k = query.size(-1)
+    scores = range_relative_attention_logits(query, key, relation_k, sep_id)
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, -1e9)
+    p_attn_orig = F.softmax(scores, dim=-1)
+    if dropout is not None:
+        p_attn = dropout(p_attn_orig)
+    return relative_attention_values(p_attn, value, relation_v), p_attn_orig
+
+
 # liyutian
 # Adapted from The Annotated Transformer
 def attention_with_history_relations(query, key, value, relation_k, relation_v, history_weight=None, mask=None, dropout=None, sep_id=None,history_reg=None):
@@ -366,6 +406,55 @@ class MultiHeadedAttentionWithHistoryRelations(nn.Module):
         return self.linears[-1](x), loss
 
 
+class MultiHeadedRangeAttentionWithRelations(nn.Module):
+    def __init__(self, h, d_model, dropout=0.1):
+        "Take in model size and number of heads."
+        super(MultiHeadedRangeAttentionWithRelations, self).__init__()
+        assert d_model % h == 0
+        # We assume d_v always equals d_k
+        self.d_k = d_model // h
+        self.h = h
+        self.linears = clones(lambda: nn.Linear(d_model, d_model), 4)
+        self.attn = None
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, query, key, value, relation_k, relation_v, sep_id, mask=None):
+        # query shape: [batch, num queries, d_model]
+        # key shape: [batch, num kv, d_model]
+        # value shape: [batch, num kv, d_model]
+        # relations_k shape: [batch, num queries, num kv, (d_model // h)]
+        # relations_v shape: [batch, num queries, num kv, (d_model // h)]
+        # mask shape: [batch, num queries, num kv]
+        if mask is not None:
+            # Same mask applied to all h heads.
+            # mask shape: [batch, 1, num queries, num kv]
+            mask = mask.unsqueeze(1)
+        nbatches = query.size(0)
+
+        # 1) Do all the linear projections in batch from d_model => h x d_k
+        query, key, value = \
+            [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
+             for l, x in zip(self.linears, (query, key, value))]
+
+        # 2) Apply attention on all the projected vectors in batch.
+        # x shape: [batch, heads, num queries, depth]
+        x, self.attn = range_attention_with_relations(
+            query,
+            key,
+            value,
+            relation_k,
+            relation_v,
+            sep_id=sep_id,
+            mask=mask,
+            dropout=self.dropout,
+        )
+
+        # 3) "Concat" using a view and apply a final linear.
+        x = x.transpose(1, 2).contiguous() \
+            .view(nbatches, -1, self.h * self.d_k)
+        return self.linears[-1](x)
+
+
 # Adapted from The Annotated Transformer
 class Encoder(nn.Module):
     "Core encoder is a stack of N layers"
@@ -385,6 +474,27 @@ class Encoder(nn.Module):
         "Pass the input (and mask) through each layer in turn."
         for layer in self.layers:
             x = layer(x, relation, mask)
+        return self.norm(x)
+
+
+class RangeEncoder(nn.Module):
+    "Core encoder is a stack of N layers"
+
+    def __init__(self, layer, layer_size, N, tie_layers=False):
+        super(RangeEncoder, self).__init__()
+        if tie_layers:
+            self.layer = layer()
+            self.layers = [self.layer for _ in range(N)]
+        else:
+            self.layers = clones(layer, N)
+        self.norm = nn.LayerNorm(layer_size)
+
+        # TODO initialize using xavier
+
+    def forward(self, x, relation, sep_id, mask):
+        "Pass the input (and mask) through each layer in turn."
+        for layer in self.layers:
+            x = layer(x, relation, sep_id, mask)
         return self.norm(x)
 
 
@@ -792,6 +902,28 @@ class HistoryEncoderLayer(nn.Module):
         x, loss = self.sublayer[0](x,
                                    lambda x: self.self_attn(x, x, x, relation_k, relation_v, mask, sep_id, history_reg))
         return self.sublayer[1](x, self.feed_forward), loss
+
+
+class RangeEncoderLayer(nn.Module):
+    "Encoder is made up of self-attn and feed forward (defined below)"
+
+    def __init__(self, size, self_attn, feed_forward, num_relation_kinds, dropout):
+        super(RangeEncoderLayer, self).__init__()
+        self.self_attn = self_attn
+        self.feed_forward = feed_forward
+        self.sublayer = clones(lambda: SublayerConnection(size, dropout), 2)
+        self.size = size
+
+        self.relation_k_emb = nn.Embedding(num_relation_kinds, self.self_attn.d_k)
+        self.relation_v_emb = nn.Embedding(num_relation_kinds, self.self_attn.d_k)
+
+    def forward(self, x, relation, sep_id, mask):
+        "Follow Figure 1 (left) for connections."
+        relation_k = self.relation_k_emb(relation)
+        relation_v = self.relation_v_emb(relation)
+
+        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, relation_k, relation_v, sep_id, mask))
+        return self.sublayer[1](x, self.feed_forward)
 
 
 # Adapted from The Annotated Transformer

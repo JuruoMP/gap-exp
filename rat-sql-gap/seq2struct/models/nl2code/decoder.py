@@ -919,6 +919,7 @@ class NL2CodeHistoryDecoder(torch.nn.Module):
             dropout=0.,
             desc_attn='bahdanau',
             copy_pointer=None,
+            range_attention=False,
             multi_loss_type='logsumexp',
             sup_att=None,
             use_align_mat=False,
@@ -983,7 +984,7 @@ class NL2CodeHistoryDecoder(torch.nn.Module):
                 h=8,
                 query_size=self.recurrent_size,
                 value_size=self.enc_recurrent_size,
-                range_attention=True)
+                range_attention=range_attention)
         elif desc_attn == 'mha-1h':
             self.desc_attn = attention.MultiHeadedAttention(
                 h=1,

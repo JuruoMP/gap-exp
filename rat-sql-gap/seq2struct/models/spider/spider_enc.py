@@ -1948,8 +1948,8 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
             use_column_type=True,
             include_in_memory=('question', 'column', 'table'),
             turn_switch_config={},
-            turn_switch_col_config={}
-
+            turn_switch_col_config={},
+            range_attention=False
     ):
         super().__init__()
         self._device = device
@@ -1964,7 +1964,8 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
         self.include_in_memory = set(include_in_memory)
         update_modules = {
             'relational_transformer':
-                spider_enc_modules.RelationalHistoryTransformerUpdate,
+                #spider_enc_modules.RelationalHistoryTransformerUpdate,
+                spider_enc_modules.RelationalRangeTransformerUpdate,
             'none':
                 spider_enc_modules.NoOpUpdate,
         }
@@ -2006,6 +2007,7 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
         self.bert_model.resize_token_embeddings(len(self.tokenizer))
         self.bert_model = self.bert_model.encoder
         self.bert_model.decoder = None
+        self.range_attention = range_attention
 
         print(next(self.bert_model.parameters()))
 
@@ -2140,8 +2142,7 @@ class SpiderEncoderHistoryBart(torch.nn.Module):
                     c_boundary,
                     tab_enc.unsqueeze(1),
                     t_boundary,
-                    sep_id,
-                    history_reg)
+                    sep_id)
             import pickle
             # pickle.dump({"desc": desc, "q_enc": q_enc, "col_enc": col_enc, "c_boundary": c_boundary, "tab_enc": tab_enc,
             #              "t_boundary": t_boundary}, open("descs_{}.pkl".format(batch_idx), "wb"))

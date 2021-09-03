@@ -11,7 +11,7 @@ function(args) _0428_base(output_from=_output_from, data_path=_data_path) + {
     local base_bert_enc_size = 1024,
     local enc_size =  base_bert_enc_size,
 
-    model_name: 'bs=sparc_history,%(bs)d,lr=%(lr)s,bert_lr=%(bert_lr)s,end_lr=%(end_lr)s,att=%(att)d' % (args + {
+    model_name: 'bs=sparc_range,%(bs)d,lr=%(lr)s,bert_lr=%(bert_lr)s,end_lr=%(end_lr)s,att=%(att)d' % (args + {
         lr: lr_s,
         bert_lr: bert_lr_s,
         end_lr: end_lr_s,
