@@ -27,9 +27,9 @@ if __name__ == '__main__':
     #                      gradient_clip_val=5, gradient_clip_algorithm='value',
     #                      callbacks=[EarlyStopping(monitor='val_loss', patience=10, mode='min')])
     trainer = pl.Trainer(gpus=-1, precision=16, default_root_dir=f'logdir/{config_name}',
-                         terminate_on_nan=True, accelerator='ddp', plugins="deepspeed_stage_2_offload",
+                         terminate_on_nan=True, accelerator='ddp', plugins="deepspeed_stage_3",
                          gradient_clip_val=5, gradient_clip_algorithm='value',
-                         callbacks=[EarlyStopping(monitor='val_loss', patience=10, mode='min')])
+                         callbacks=[EarlyStopping(monitor='val_loss', patience=3, mode='min')])
     trainer.fit(model, train_dataloader, dev_dataloader)
 
-    trainer.test(test_dataloaders=dev_dataloader)
+    # trainer.test(test_dataloaders=dev_dataloader)
