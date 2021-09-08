@@ -33,13 +33,13 @@ class SQLSeq2seqModel(pl.LightningModule):
         lm_logits = self.model(**self.filter_input_dict(x)).logits
         masked_lm_loss = self.loss_fct(lm_logits.flatten(0, -2), x['labels'].view(-1))
 
-        self.log('train_loss', masked_lm_loss)
+        self.log('train_loss', masked_lm_loss, sync_dist=True)
         return masked_lm_loss
 
     def validation_step(self, x, batch_idx):
         lm_logits = self.model(**self.filter_input_dict(x)).logits
         masked_lm_loss = self.loss_fct(lm_logits.flatten(0, -2), x['labels'].view(-1))
-        self.log('val_loss', masked_lm_loss)
+        self.log('val_loss', masked_lm_loss, sync_dist=True)
         pred_ids = lm_logits.argmax(dim=-1)
         pred_lfs = []
         for i in range(pred_ids.size(0)):
@@ -48,6 +48,19 @@ class SQLSeq2seqModel(pl.LightningModule):
         return (pred_lfs, masked_lm_loss)
 
     def validation_epoch_end(self, val_ret):
+        return
+
+    def test_step(self, x, batch_idx):
+        lm_logits = self.model(**self.filter_input_dict(x)).logits
+        masked_lm_loss = self.loss_fct(lm_logits.flatten(0, -2), x['labels'].view(-1))
+        pred_ids = lm_logits.argmax(dim=-1)
+        pred_lfs = []
+        for i in range(pred_ids.size(0)):
+            pred_lf = self.tokenizer.convert_ids_to_tokens(pred_ids[i])
+            pred_lfs.append((x['id'][i].item(), pred_lf))
+        return (pred_lfs, masked_lm_loss)
+
+    def test_epoch_end(self, val_ret):
         if self.global_rank == 0:
             pred_list = [j for i in val_ret for j in i[0]]
             losses = [i[1].item() for i in val_ret]
@@ -74,7 +87,7 @@ class SQLSeq2seqModel(pl.LightningModule):
             exact_match_acc = evaluate_sparc(
                 os.path.join(self.data_path, 'dev_gold.txt'), os.path.join(self.save_path, 'predict/predict.txt'),
                 os.path.join(self.data_path, 'database'), os.path.join(self.data_path, 'tables.json'))
-            self.log('val_acc', exact_match_acc)
+            self.log('val_acc', exact_match_acc, sync_dist=True)
             print(f'Validation exact match acc = {exact_match_acc:.3f}, loss = {avg_loss:.3e}')
 
     def filter_input_dict(self, x):
