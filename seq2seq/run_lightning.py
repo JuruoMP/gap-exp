@@ -47,8 +47,8 @@ if __name__ == '__main__':
     #                      terminate_on_nan=True,
     #                      gradient_clip_val=0.5,
     #                      callbacks=[EarlyStopping(monitor='val_loss', patience=10, mode='min')])
-    trainer = pl.Trainer(gpus=-1, precision=32, default_root_dir=f'logdir/{config_name}',
-                         terminate_on_nan=True, accelerator='ddp', #plugins="deepspeed_stage_3",
+    trainer = pl.Trainer(gpus=-1, default_root_dir=f'logdir/{config_name}',
+                         terminate_on_nan=True, accelerator='ddp', precision=16, #plugins="deepspeed_stage_3",
                          gradient_clip_val=0.5,
                          callbacks=[EarlyStopping(monitor='val_loss', patience=3, mode='min')])
     trainer.fit(model)

@@ -107,7 +107,15 @@ class SQLSeq2seqModel(pl.LightningModule):
         self.opt = optimizer
         return [optimizer]
 
-    # def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, second_order_closure=None):
+    # def optimizer_step(self,
+    #                    epoch,
+    #                    batch_idx,
+    #                    optimizer,
+    #                    optimizer_idx,
+    #                    optimizer_closure,
+    #                    on_tpu=False,
+    #                    using_native_amp=False,
+    #                    using_lbfgs=False, ):
     #     optimizer.step()
     #     optimizer.zero_grad()
     #     self.lr_scheduler.step()
@@ -127,6 +135,5 @@ class SQLSeq2seqModel(pl.LightningModule):
         return dataloader
 
     def val_dataloader(self):
-        return self.train_dataloader()
-        # val_dataset = SparcDataset('data/sparc/dev.json', 'data/sparc/tables.json', 'data/sparc/database', config_name=self.config_name)
-        # return DataLoader(val_dataset, batch_size=self.config_dict.train_batch_size, num_workers=4, collate_fn=val_dataset.collate_fn)
+        val_dataset = SparcDataset('data/sparc/dev.json', 'data/sparc/tables.json', 'data/sparc/database', config_name=self.config_name)
+        return DataLoader(val_dataset, batch_size=self.config_dict.train_batch_size, num_workers=4, collate_fn=val_dataset.collate_fn)
