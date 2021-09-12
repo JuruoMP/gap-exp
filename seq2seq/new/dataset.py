@@ -142,6 +142,7 @@ class SparcDataset(torch.utils.data.Dataset):
                     orig_schema=self.schemas[entry['database_id']].orig)
                 if self.validate_item(item):
                     self.examples.append(item)
+            if len(self.examples) > 1000: break
 
         print('Sparc dataset built.')
 
@@ -151,14 +152,13 @@ class SparcDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         item = self.examples[idx]
         encoder_dict, decoder_dict = self.tokenize_item(item)
-        labels = [x if x != self.tokenizer.pad_token_id else -100 for x in decoder_dict['input_ids']]
         return {
             'id': item.id,
             'input_ids': encoder_dict['input_ids'],
             'attention_mask': encoder_dict['attention_mask'],
-            # 'decoder_input_ids': decoder_dict['input_ids'],
+            'decoder_input_ids': decoder_dict['input_ids'],
             'decoder_attention_mask': decoder_dict['attention_mask'],
-            'labels': labels,
+            'labels': copy.deepcopy(decoder_dict['input_ids']),
         }
 
     def tokenize_item(self, item):
@@ -183,11 +183,11 @@ class SparcDataset(torch.utils.data.Dataset):
 
     def collate_fn(self, x_list):
         max_input_len = max(len(x['input_ids']) for x in x_list)
-        max_output_len = max(len(x['labels']) for x in x_list)
+        max_output_len = max(len(x['decoder_input_ids']) for x in x_list)
         for x in x_list:
             x['input_ids'] += [0 for _ in range(max_input_len - len(x['input_ids']))]
             x['attention_mask'] += [0 for _ in range(max_input_len - len(x['attention_mask']))]
-            # x['decoder_input_ids'] += [0 for _ in range(max_output_len - len(x['decoder_input_ids']))]
+            x['decoder_input_ids'] += [0 for _ in range(max_output_len - len(x['decoder_input_ids']))]
             x['decoder_attention_mask'] += [0 for _ in range(max_output_len - len(x['decoder_attention_mask']))]
             x['labels'] += [-100 for _ in range(max_output_len - len(x['labels']))]
         return default_collate([{k: torch.tensor(v).long() for k, v in x.items()} for x in x_list])
