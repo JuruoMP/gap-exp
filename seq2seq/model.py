@@ -80,6 +80,13 @@ class SQLSeq2seqModel(pl.LightningModule):
             with open(os.path.join(self.save_path, 'predict/predict.txt'), 'w') as fw:
                 for idx, pred_lf in pred_list:
                     fw.write(f'{idx}\t{pred_lf}\n')
+            exact_match_acc = evaluate_sparc(gold=os.path.join(self.data_path, 'dev_gold.txt'),
+                                             predict=os.path.join(self.save_path, 'predict/predict.txt'),
+                                             db_dir=os.path.join(self.data_path, 'database'),
+                                             table=os.path.join(self.data_path, 'tables.json'),
+                                             etype='match')
+            self.log('exact match', exact_match_acc)
+            print(f'Exact match acc = {exact_match_acc}')
 
     def process_input_dict(self, x):
         d = {}

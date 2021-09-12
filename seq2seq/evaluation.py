@@ -553,7 +553,7 @@ def evaluate(gold, predict, db_dir, table, etype='match'):
         turn_scores = {"exec": [], "exact": []}
         for idx, pg in enumerate(zip(p, g)):
             p, g = pg
-            p_str = p[0]
+            p_str = p[1]
             p_str = p_str.replace("value", "1")
             g_str, db = g
             db_name = db

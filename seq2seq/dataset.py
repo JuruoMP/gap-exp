@@ -162,17 +162,17 @@ class SparcDataset(torch.utils.data.Dataset):
         }
 
     def tokenize_item(self, item):
-        nl = 'convert text to SQL: ' + ' '.join([t for s in item.text for t in s])
+        nl = ' '.join([t for s in item.text for t in s])
         sql = item.code
         columns = []
         for c in item.schema.columns:
             if c and c.table:
                 tn, cn = c.table.orig_name, c.orig_name
                 columns.append((tn, cn))
-        concat_input = nl + ' <#>'
+        concat_input = nl + ' # '
         for c in columns:
-            concat_input += c[0] + ' ' + c[1] + ' <#>'
-        concat_input = concat_input.rstrip(' <#>')
+            concat_input += c[0] + ' ' + c[1] + ' # '
+        concat_input = concat_input.rstrip(' # ')
         encoder_dict = self.tokenizer(concat_input + ' </s>')
         decoder_dict = self.tokenizer(sql + ' </s>')
         return encoder_dict, decoder_dict
