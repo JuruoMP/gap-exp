@@ -1,6 +1,7 @@
 import os
 import argparse
 
+from icecream import ic
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoConfig, AutoTokenizer, BartForConditionalGeneration, T5ForConditionalGeneration, get_linear_schedule_with_warmup
@@ -22,7 +23,7 @@ class SQLSeq2seqModel(pl.LightningModule):
             self.model = T5ForConditionalGeneration.from_pretrained(config_name)
         elif 'bart' in config_name:
             self.model = BartForConditionalGeneration.from_pretrained(config_name)
-        self.generate_interval = 3
+        self.generate_interval = 1
 
     def forward(self, x):
         # in lightning, forward defines the prediction/inference actions
@@ -85,8 +86,9 @@ class SQLSeq2seqModel(pl.LightningModule):
                                              db_dir=os.path.join(self.data_path, 'database'),
                                              table=os.path.join(self.data_path, 'tables.json'),
                                              etype='match')
-            self.log('exact match', exact_match_acc)
-            print(f'Exact match acc = {exact_match_acc}')
+            # self.log('exact match', exact_match_acc, sync_dist=True, prog_bar=True)
+            # print(f'Exact match acc = {exact_match_acc}')
+            ic(exact_match_acc)
 
     def process_input_dict(self, x):
         d = {}
@@ -135,10 +137,10 @@ class SQLSeq2seqModel(pl.LightningModule):
                 // self.config_dict.gradient_accumulation_steps
                 * float(self.config_dict.num_train_epochs)
         )
-        scheduler = get_linear_schedule_with_warmup(
-            self.opt, num_warmup_steps=self.config_dict.warmup_steps, num_training_steps=t_total
-        )
-        self.lr_scheduler = scheduler
+        # scheduler = get_linear_schedule_with_warmup(
+        #     self.opt, num_warmup_steps=self.config_dict.warmup_steps, num_training_steps=t_total
+        # )
+        # self.lr_scheduler = scheduler
         return dataloader
 
     def val_dataloader(self):

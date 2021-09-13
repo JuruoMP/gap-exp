@@ -128,7 +128,7 @@ class SparcDataset(torch.utils.data.Dataset):
         self.schemas, self.eval_foreign_key_maps = load_tables(tables_paths)
 
         raw_data = json.load(open(path))
-        for entry in tqdm(raw_data):
+        for entry in raw_data:
             accumulated_toks = []
             for i, interaction in enumerate(entry['interaction']):
                 new_toks = interaction['utterance_toks']

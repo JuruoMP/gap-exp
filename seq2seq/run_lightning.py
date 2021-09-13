@@ -1,5 +1,6 @@
 import os
 import sys
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import random
 import argparse
@@ -26,7 +27,7 @@ set_seed(1)
 
 if __name__ == '__main__':
     # config_name = 'facebook/bart-base'
-    config_name = 't5-base'
+    config_name = 't5-large'
     # train_dataset = SparcDataset('data/sparc/train.json', 'data/sparc/tables.json', 'data/sparc/database', config_name=config_name)
     # dev_dataset = SparcDataset('data/sparc/dev.json', 'data/sparc/tables.json', 'data/sparc/database', config_name=config_name)
     # train_dataloader = DataLoader(train_dataset, batch_size=2, shuffle=True, collate_fn=train_dataset.collate_fn)
@@ -40,7 +41,7 @@ if __name__ == '__main__':
         train_batch_size=8,
         n_gpu=torch.cuda.device_count(),
         gradient_accumulation_steps=1,
-        num_train_epochs=20,
+        num_train_epochs=100,
     )
     model = SQLSeq2seqModel(config_name=config_name, config_dict=config_dict)
     # trainer = pl.Trainer(gpus=0, default_root_dir=f'logdir/{config_name}',
@@ -48,8 +49,8 @@ if __name__ == '__main__':
     #                      gradient_clip_val=0.5,
     #                      callbacks=[EarlyStopping(monitor='val_loss', patience=10, mode='min')])
     trainer = pl.Trainer(gpus=-1, default_root_dir=f'logdir/{config_name}',
-                         terminate_on_nan=True, accelerator='ddp', precision=16, #plugins="deepspeed_stage_3",
-                         gradient_clip_val=0.5,
+                         terminate_on_nan=True, accelerator='ddp', precision=16, plugins="deepspeed_stage_3",
+                         gradient_clip_val=0.5, max_epochs=100,
                          callbacks=[EarlyStopping(monitor='val_loss', patience=3, mode='min')])
     trainer.fit(model)
 
