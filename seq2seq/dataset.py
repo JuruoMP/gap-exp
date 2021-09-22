@@ -117,12 +117,12 @@ def load_tables(path):
 
 
 class SparcDataset(torch.utils.data.Dataset):
-    def __init__(self, path, tables_paths, db_path, config_name='facebook/bart-large'):
+    def __init__(self, path, tables_paths, db_path, tokenizer):
         self.path = path
         self.db_path = db_path
         self.examples = []
         self.use_column_type = False
-        self.tokenizer = AutoTokenizer.from_pretrained(config_name)
+        self.tokenizer = tokenizer
         self.max_seq_len = self.tokenizer.model_max_length
 
         self.schemas, self.eval_foreign_key_maps = load_tables(tables_paths)

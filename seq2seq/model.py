@@ -1,5 +1,6 @@
 import os
 import argparse
+import time
 
 from icecream import ic
 import torch
@@ -12,7 +13,7 @@ from evaluation import evaluate as evaluate_sparc
 
 
 class SQLSeq2seqModel(pl.LightningModule):
-    def __init__(self, config_name, config_dict, data_path='data/sparc', save_path='logdir'):
+    def __init__(self, config_name, config_dict, data_path='data/sparc', save_path='logdir/sparc'):
         super().__init__()
         self.config_name = config_name
         self.data_path = data_path
@@ -21,6 +22,9 @@ class SQLSeq2seqModel(pl.LightningModule):
         self.tokenizer = AutoTokenizer.from_pretrained(config_name)
         if 't5' in config_name:
             self.model = T5ForConditionalGeneration.from_pretrained(config_name)
+            self.tokenizer.add_tokens(['<'])
+            print('Add \'<\' token into vocabulary.')
+            self.model.resize_token_embeddings(len(self.tokenizer))
         elif 'bart' in config_name:
             self.model = BartForConditionalGeneration.from_pretrained(config_name)
         self.generate_interval = 1
@@ -69,6 +73,7 @@ class SQLSeq2seqModel(pl.LightningModule):
 
     def validation_epoch_end(self, validation_step_output):
         if self.global_rank == 0 and self.current_epoch % self.generate_interval == 0:
+            time.sleep(3)
             pred_dict = {}
             for i in range(8):
                 if os.path.exists(os.path.join(self.save_path, f'predict/predict_rank_{i}.txt')):
@@ -86,8 +91,7 @@ class SQLSeq2seqModel(pl.LightningModule):
                                              db_dir=os.path.join(self.data_path, 'database'),
                                              table=os.path.join(self.data_path, 'tables.json'),
                                              etype='match')
-            # self.log('exact match', exact_match_acc, sync_dist=True, prog_bar=True)
-            # print(f'Exact match acc = {exact_match_acc}')
+            # self.log('exact match', exact_match_acc, sync_dist=True, on_step=False, on_epoch=True)
             ic(exact_match_acc)
 
     def process_input_dict(self, x):
@@ -130,7 +134,10 @@ class SQLSeq2seqModel(pl.LightningModule):
     #     self.lr_scheduler.step()
 
     def train_dataloader(self):
-        train_dataset = SparcDataset('data/sparc/train.json', 'data/sparc/tables.json', 'data/sparc/database', config_name=self.config_name)
+        train_dataset = SparcDataset(os.path.join(self.data_path, 'train.json'),
+                                     os.path.join(self.data_path, 'tables.json'),
+                                     os.path.join(self.data_path, 'database'),
+                                     tokenizer=self.tokenizer)
         dataloader = DataLoader(train_dataset, batch_size=self.config_dict.train_batch_size, drop_last=True, shuffle=True, num_workers=4, collate_fn=train_dataset.collate_fn)
         t_total = (
                 (len(dataloader.dataset) // (self.config_dict.train_batch_size * max(1, self.config_dict.n_gpu)))
@@ -144,5 +151,8 @@ class SQLSeq2seqModel(pl.LightningModule):
         return dataloader
 
     def val_dataloader(self):
-        val_dataset = SparcDataset('data/sparc/dev.json', 'data/sparc/tables.json', 'data/sparc/database', config_name=self.config_name)
+        val_dataset = SparcDataset(os.path.join(self.data_path, 'dev.json'),
+                                   os.path.join(self.data_path, 'tables.json'),
+                                   os.path.join(self.data_path, 'database'),
+                                   tokenizer=self.tokenizer)
         return DataLoader(val_dataset, batch_size=self.config_dict.train_batch_size, num_workers=4, collate_fn=val_dataset.collate_fn)
