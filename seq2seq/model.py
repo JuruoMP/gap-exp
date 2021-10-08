@@ -51,7 +51,7 @@ class SQLSeq2seqModel(pl.LightningModule):
         pred_lfs = []
         if self.current_epoch % self.generate_interval == 0:
             pred_ids = self.model.generate(input_ids=x['input_ids'], attention_mask=x['attention_mask'],
-                                           num_beams=1, max_length=64, early_stopping=True, no_repeat_ngram_size=0)
+                                           num_beams=1, max_length=128, early_stopping=True, no_repeat_ngram_size=0)
             for i in range(x['id'].size(0)):
                 pred_lf = self.tokenizer.convert_ids_to_tokens(pred_ids[i])[1:]
                 if self.tokenizer.eos_token in pred_lf:

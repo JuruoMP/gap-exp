@@ -43,7 +43,7 @@ if __name__ == '__main__':
         gradient_accumulation_steps=1,
         num_train_epochs=100,
     )
-    dataset = 'cosql'
+    dataset = 'sparc'
     model = SQLSeq2seqModel(config_name=config_name, config_dict=config_dict, data_path=f'data/{dataset}', save_path=f'logdir/{dataset}')
     # trainer = pl.Trainer(gpus=0, default_root_dir=f'logdir/{config_name}',
     #                      terminate_on_nan=True,
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     trainer = pl.Trainer(gpus=-1, default_root_dir=f'logdir/{config_name}_{dataset}',
                          terminate_on_nan=True, accelerator='ddp', #precision=16, plugins="deepspeed_stage_3",
                          gradient_clip_val=0.5, max_epochs=100,
-                         callbacks=[EarlyStopping(monitor='val_loss', patience=3, mode='min')])
+                         callbacks=[EarlyStopping(monitor='val_loss', patience=10, mode='min')])
     trainer.fit(model)
 
     # trainer.test(test_dataloaders=dev_dataloader)

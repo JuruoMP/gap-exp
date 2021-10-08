@@ -1,8 +1,11 @@
 import os
 import json
 import attr
+import re
+import random
 import copy
 from tqdm import tqdm
+from typing import Dict, List
 
 import torch
 from torch.utils.data import Dataset
@@ -10,7 +13,8 @@ from torch.utils.data.dataloader import default_collate
 from transformers import AutoTokenizer, T5Tokenizer, BartTokenizer
 import networkx as nx
 from seq2seq import evaluation
-
+from seq2seq.utils.dataset import normalize, serialize_schema
+from seq2seq.utils.cosql import cosql_get_input, cosql_get_target
 
 @attr.s
 class SparcItem:
@@ -127,6 +131,9 @@ class SparcDataset(torch.utils.data.Dataset):
 
         self.schemas, self.eval_foreign_key_maps = load_tables(tables_paths)
 
+        self.normalize_query = True
+        self.use_serialized_schema = True
+
         raw_data = json.load(open(path))
         for entry in raw_data:
             accumulated_toks = []
@@ -149,7 +156,9 @@ class SparcDataset(torch.utils.data.Dataset):
         return len(self.examples)
 
     def __getitem__(self, idx):
-        item = self.examples[idx]
+        item = copy.deepcopy(self.examples[idx])
+        item.text = item.text[1:] + item.text[:1]  # strategy1: bring current utterance to the front
+        # item.text = item.text[::-1]  # strategy2: reverse text
         encoder_dict, decoder_dict = self.tokenize_item(item)
         labels = [x if x != self.tokenizer.pad_token_id else -100 for x in decoder_dict['input_ids']]
         return {
@@ -163,16 +172,37 @@ class SparcDataset(torch.utils.data.Dataset):
 
     def tokenize_item(self, item):
         nl = ' '.join([t for s in item.text for t in s])
-        sql = item.code
-        columns = []
-        for c in item.schema.columns:
-            if c and c.table:
-                tn, cn = c.table.orig_name, c.orig_name
-                columns.append((tn, cn))
-        concat_input = nl + ' # '
-        for c in columns:
-            concat_input += c[0] + ' ' + c[1] + ' # '
-        concat_input = concat_input.rstrip(' # ')
+        sql = normalize(item.code) if self.normalize_query else item.code
+        if self.use_serialized_schema:
+            serialized_schema = serialize_schema(
+                question=nl,
+                db_path=self.db_path,
+                db_id=item.orig[0]['database_id'],
+                db_table_names=item.schema.orig['table_names'],
+                db_column_names={
+                    'table_id': [x[0] for x in item.schema.orig['column_names_original']],
+                    'column_name': [x[1] for x in item.schema.orig['column_names_original']]
+                },
+                schema_serialization_type="peteshaw",
+                schema_serialization_randomized=False,
+                schema_serialization_with_db_id=True,
+                schema_serialization_with_db_content=False
+            )
+        else:
+            serialized_schema = ''
+            columns = []
+            for c in item.schema.columns:
+                if c and c.table:
+                    tn, cn = c.table.orig_name, c.orig_name
+                    columns.append((tn, cn))
+            for c in columns:
+                serialized_schema += c[0] + ' ' + c[1] + ' # '
+            serialized_schema = serialized_schema.rstrip(' # ')
+        concat_input = cosql_get_input(
+            utterances=[' '.join(x) for x in item.text],
+            serialized_schema=serialized_schema,
+            prefix=''
+        )
         encoder_dict = self.tokenizer(concat_input + ' </s>')
         decoder_dict = self.tokenizer(sql + ' </s>')
         return encoder_dict, decoder_dict
