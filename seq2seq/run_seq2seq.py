@@ -1,12 +1,15 @@
 import sys
 sys.path.append('./')
 
+import os
+import logging
 import json
 
 from transformers import AutoConfig, AutoTokenizer, AutoModelForSeq2SeqLM
 from transformers.hf_argparser import HfArgumentParser
 from transformers.data.data_collator import DataCollatorForSeq2Seq
 from transformers.training_args_seq2seq import Seq2SeqTrainingArguments
+from transformers.trainer_utils import get_last_checkpoint, set_seed
 
 from seq2seq.utils.args import ModelArguments
 from seq2seq.utils.dataset import DataTrainingArguments, DataArguments
@@ -27,6 +30,23 @@ def main():
     model_args, data_args, data_training_args, training_args = parser.parse_json_file(
         json_file=config_file
     )
+
+    last_checkpoint = None
+    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
+        last_checkpoint = get_last_checkpoint(training_args.output_dir)
+        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
+            raise ValueError(
+                f"Output directory ({training_args.output_dir}) already exists and is not empty. "
+                "Use --overwrite_output_dir to overcome."
+            )
+        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+            logging.info(
+                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+            )
+    os.makedirs(training_args.output_dir, exist_ok=True)
+
+    set_seed(training_args.seed)
 
     config = AutoConfig.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
@@ -81,7 +101,7 @@ def main():
         "target_with_db_id": data_training_args.target_with_db_id,
     }
     trainer = CoSQLTrainer(**trainer_kwargs)
-    train_result = trainer.train()
+    train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
     trainer.save_model()
     metrics = train_result.metrics
     print(metrics)

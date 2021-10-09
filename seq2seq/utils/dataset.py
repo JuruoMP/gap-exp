@@ -149,17 +149,17 @@ class DataArguments:
         metadata={"help": "Paths of the metric modules."},
     )
     test_suite_db_dir: Optional[str] = field(
-        default="/app/third_party/test_suite/database",
+        default="./data/database",
         metadata={"help": "Path to the test-suite databases."})
     data_config_file : Optional[str] = field(
         default=None,
         metadata={"help": "Path to data configuration file (specifying the database splits)"}
     )
-    test_sections : Optional[List[str]] = field(
+    test_sections: Optional[List[str]] = field(
         default=None,
         metadata={"help": "Sections from the data config to use for testing"}
     )
-    data_cache_dir : Optional[str] = field(
+    data_cache_dir: Optional[str] = field(
         default='cache/',
         metadata={"help": "Path for cache data"}
     )

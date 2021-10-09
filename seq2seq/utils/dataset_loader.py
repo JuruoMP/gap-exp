@@ -43,7 +43,7 @@ def load_dataset(
     tokenizer: PreTrainedTokenizerFast,
 ) -> Tuple[Metric, DatasetSplits]:
     _spider_dataset_dict: Callable[[], DatasetDict] = lambda: datasets.load.load_dataset(
-        path=data_args.dataset_paths["spider"], cache_dir=model_args.cache_dir
+        path=data_args.dataset_paths["spider"], cache_dir=data_args.data_cache_dir
     )
     _spider_metric: Callable[[], Metric] = lambda: datasets.load.load_metric(
         path=data_args.metric_paths["spider"], config_name=data_args.metric_config, test_suite_db_dir=data_args.test_suite_db_dir
@@ -61,7 +61,7 @@ def load_dataset(
     )
 
     _cosql_dataset_dict: Callable[[], DatasetDict] = lambda: datasets.load.load_dataset(
-        path=data_args.dataset_paths["cosql"], cache_dir=model_args.cache_dir
+        path=data_args.dataset_paths["cosql"], cache_dir=data_args.data_cache_dir
     )
     _cosql_metric: Callable[[], Metric] = lambda: datasets.load.load_metric(
         path=data_args.metric_paths["cosql"], config_name=data_args.metric_config, test_suite_db_dir=data_args.test_suite_db_dir
@@ -79,7 +79,7 @@ def load_dataset(
     )
 
     _sparc_dataset_dict: Callable[[], DatasetDict] = lambda: datasets.load.load_dataset(
-        path=data_args.dataset_paths["sparc"], cache_dir=model_args.cache_dir
+        path=data_args.dataset_paths["sparc"], cache_dir=data_args.data_cache_dir
     )
 
     _prepare_splits_kwargs = {
