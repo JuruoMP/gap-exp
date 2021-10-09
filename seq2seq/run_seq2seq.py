@@ -80,12 +80,11 @@ def main():
         "ignore_pad_token_for_loss": data_training_args.ignore_pad_token_for_loss,
         "target_with_db_id": data_training_args.target_with_db_id,
     }
-    trainer = SpiderTrainer(**trainer_kwargs)
-    a = 1
+    trainer = CoSQLTrainer(**trainer_kwargs)
     train_result = trainer.train()
     trainer.save_model()
     metrics = train_result.metrics
-    a = 1
+    print(metrics)
 
 
 if __name__ == '__main__':
