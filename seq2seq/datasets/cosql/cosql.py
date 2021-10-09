@@ -189,5 +189,5 @@ class CoSQL(datasets.GeneratorBasedBuilder):
                         "turn_idx": turn_idx,
                         **db_stuff,
                     }
-                self.global_idx += 1
+                    self.global_idx += 1
         self.global_idx = 0

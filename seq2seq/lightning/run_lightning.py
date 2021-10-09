@@ -34,7 +34,7 @@ if __name__ == '__main__':
     # dev_dataloader = DataLoader(dev_dataset, batch_size=2, shuffle=False, collate_fn=dev_dataset.collate_fn)
 
     config_dict = argparse.Namespace(
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         weight_decay=0.0,
         adam_epsilon=1e-8,
         warmup_steps=0,
@@ -51,7 +51,7 @@ if __name__ == '__main__':
     #                      callbacks=[EarlyStopping(monitor='val_loss', patience=10, mode='min')])
     trainer = pl.Trainer(gpus=-1, default_root_dir=f'logdir/{config_name}_{dataset}',
                          terminate_on_nan=True, accelerator='ddp', #precision=16, plugins="deepspeed_stage_3",
-                         gradient_clip_val=0.5, max_epochs=100,
+                         gradient_clip_val=0.5, max_epochs=100, accumulate_grad_batches=16,
                          callbacks=[EarlyStopping(monitor='val_loss', patience=10, mode='min')])
     trainer.fit(model)
 

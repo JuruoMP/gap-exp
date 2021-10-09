@@ -1,20 +1,15 @@
-import os
 import json
 import attr
-import re
-import random
 import copy
-from tqdm import tqdm
-from typing import Dict, List
 
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data.dataloader import default_collate
-from transformers import AutoTokenizer, T5Tokenizer, BartTokenizer
 import networkx as nx
-from seq2seq import evaluation
+from seq2seq.lightning import evaluation
 from seq2seq.utils.dataset import normalize, serialize_schema
-from seq2seq.utils.cosql import cosql_get_input, cosql_get_target
+from seq2seq.utils.cosql import cosql_get_input
+
 
 @attr.s
 class SparcItem:

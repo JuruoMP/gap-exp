@@ -1,14 +1,13 @@
 import os
-import argparse
 import time
 
 from icecream import ic
 import torch
-from torch.utils.data import Dataset, DataLoader
-from transformers import AutoConfig, AutoTokenizer, BartForConditionalGeneration, T5ForConditionalGeneration, get_linear_schedule_with_warmup
+from torch.utils.data import DataLoader
+from transformers import AutoTokenizer, BartForConditionalGeneration, T5ForConditionalGeneration
 import pytorch_lightning as pl
 
-from dataset import SparcDataset
+from seq2seq.lightning.dataset import SparcDataset
 from evaluation import evaluate as evaluate_sparc
 
 
