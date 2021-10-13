@@ -17,7 +17,7 @@ from seq2seq.utils.dataset_loader import load_dataset
 from seq2seq.trainer import SpiderTrainer, CoSQLTrainer
 
 def main():
-    config_file = 'seq2seq/configs/train_sparc.json'
+    config_file = 'seq2seq/configs/train.json'
 
     parser = HfArgumentParser(
         (ModelArguments, DataArguments, DataTrainingArguments, Seq2SeqTrainingArguments)
@@ -100,7 +100,7 @@ def main():
         "ignore_pad_token_for_loss": data_training_args.ignore_pad_token_for_loss,
         "target_with_db_id": data_training_args.target_with_db_id,
     }
-    trainer = CoSQLTrainer(**trainer_kwargs)
+    trainer = SpiderTrainer(**trainer_kwargs)
     train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
     trainer.save_model()
     metrics = train_result.metrics

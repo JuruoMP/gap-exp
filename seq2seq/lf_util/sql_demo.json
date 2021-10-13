@@ -1,0 +1,11 @@
+'select': (False #is distinct#, [(0 #index of AGG_OPS#, (0 #index of unit_op to save col1-col2 cases#, (0#index of AGG_OPS#, '__artists.lname__' #index of column names#, False #is DISTINCT#), None #col_unit2 usually is None, for saving col1-col2#)), (0, (0, (0, '__artists.fname__', False), None))])
+'from': {
+  'table_units' #list of tables in from#:
+    [('table_unit' #some froms are nested sql#, '__artists__' #gonna be index of table#), ('table_unit', '__paintings__')],
+
+  'conds': [
+    (False #if there is NOT#,
+    2 #index of WHERE_OPS#,
+    (0 #index of unit_op to save col1-col2 cases#,
+    (0 #index of AGG_OPS#, '__artists.artistid__' #index of column names#, False #is DISTINCT#), None #col_unit2 usually is None, for saving col1-col2#), 't2.painterid' #val1, here is t2 ref id#, None #val2 for between val1 and val2#]}
+'except': {'from': {'table_units': [('table_unit', '__artists__'), ('table_unit', '__sculptures__')], 'conds': [(False, 2, (0, (0, '__artists.artistid__', False), None), (0, '__sculptures.sculptorid__', False), None)]}, 'select': (False, [(0, (0, (0, '__artists.lname__', False), None)), (0, (0, (0, '__artists.fname__', False), None))])}
