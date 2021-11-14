@@ -272,3 +272,112 @@ class CoSQLTrainer(Seq2SeqTrainer):
         # references = [{**{"query": r}, **m} for r, m in zip(decoded_references, metas)]
         references = metas
         return self.metric.compute(predictions=predictions, references=references)
+
+
+class SpiderSeqTrainer(Seq2SeqTrainer):
+    def __init__(self, *args, **kwargs):
+        from seq2seq.lf_util.sql_dict_parser import SqlParser
+        super().__init__(*args, **kwargs)
+        self.sql_parser = SqlParser('data/spider/tables.json', 'data/database')
+
+    def _post_process_function(
+        self, examples: Dataset, features: Dataset, predictions: np.ndarray, stage: str
+    ) -> EvalPrediction:
+        inputs = self.tokenizer.batch_decode([f["input_ids"] for f in features], skip_special_tokens=True)
+        label_ids = [f["labels"] for f in features]
+        if self.ignore_pad_token_for_loss:
+            # Replace -100 in the labels as we can't decode them.
+            _label_ids = np.where(label_ids != -100, label_ids, self.tokenizer.pad_token_id)
+        decoded_label_ids = self.tokenizer.batch_decode(_label_ids, skip_special_tokens=True)
+        metas = [
+            {
+                "query": x["query"],
+                "question": x["question"],
+                "context": context,
+                "label": label,
+                "db_id": x["db_id"],
+                "db_path": x["db_path"],
+                "db_table_names": x["db_table_names"],
+                "db_column_names": x["db_column_names"],
+                "db_foreign_keys": x["db_foreign_keys"],
+            }
+            for x, context, label in zip(examples, inputs, decoded_label_ids)
+        ]
+        predictions = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
+        assert len(metas) == len(predictions)
+        with open(f"{self.args.output_dir}/predictions_{stage}.json", "w") as f:
+            json.dump(
+                [dict(**{"prediction": prediction}, **meta) for prediction, meta in zip(predictions, metas)],
+                f,
+                indent=4,
+            )
+        return EvalPrediction(predictions=predictions, label_ids=label_ids, metas=metas)
+
+    def _compute_metrics(self, eval_prediction: EvalPrediction) -> dict:
+        predictions, label_ids, metas = eval_prediction
+        cnt_all, cnt_correct = 0, 0
+        for i in range(len(predictions)):
+            pred = predictions[i]
+            _, pred_sql = pred.split('|')
+            _, gold_sql = metas[i]['label'].split('|')
+            pred_sql_dict = self.sql_parser.sql_to_dict(metas[i]['db_id'], pred_sql.strip())
+            gold_sql_dict = self.sql_parser.raw_sql_to_dict(metas[i]['db_id'], metas[i]['query'])
+            cnt_all += 1
+            if self.sql_parser.check_equal(pred_sql_dict, gold_sql_dict):
+                cnt_correct += 1
+        return {'eval_exact_match': cnt_correct / cnt_all}
+
+
+class CoSQLSeqTrainer(Seq2SeqTrainer):
+    def __init__(self, *args, **kwargs):
+        from seq2seq.lf_util.sql_dict_parser import SqlParser
+        super().__init__(*args, **kwargs)
+        self.sql_parser = SqlParser('data/cosql/tables.json', 'data/database')
+
+    def _post_process_function(
+        self, examples: Dataset, features: Dataset, predictions: np.ndarray, stage: str
+    ) -> EvalPrediction:
+        inputs = self.tokenizer.batch_decode([f["input_ids"] for f in features], skip_special_tokens=True)
+        label_ids = [f["labels"] for f in features]
+        if self.ignore_pad_token_for_loss:
+            # Replace -100 in the labels as we can't decode them.
+            _label_ids = np.where(label_ids != -100, label_ids, self.tokenizer.pad_token_id)
+        decoded_label_ids = self.tokenizer.batch_decode(_label_ids, skip_special_tokens=True)
+        metas = [
+            {
+                "query": x["query"],
+                "utterances": x["utterances"],
+                "turn_idx": x["turn_idx"],
+                "context": context,
+                "label": label,
+                "db_id": x["db_id"],
+                "db_path": x["db_path"],
+                "db_table_names": x["db_table_names"],
+                "db_column_names": x["db_column_names"],
+                "db_foreign_keys": x["db_foreign_keys"],
+            }
+            for x, context, label in zip(examples, inputs, decoded_label_ids)
+        ]
+        predictions = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
+        assert len(metas) == len(predictions)
+        with open(f"{self.args.output_dir}/predictions_{stage}.json", "w") as f:
+            json.dump(
+                [dict(**{"prediction": prediction}, **meta) for prediction, meta in zip(predictions, metas)],
+                f,
+                indent=4,
+            )
+        return EvalPrediction(predictions=predictions, label_ids=label_ids, metas=metas)
+
+    def _compute_metrics(self, eval_prediction: EvalPrediction) -> dict:
+        predictions, label_ids, metas = eval_prediction
+        cnt_all, cnt_correct = 0, 0
+        for i in range(len(predictions)):
+            pred = predictions[i]
+            _, pred_sql = pred.split('|')
+            _, gold_sql = metas[i]['label'].split('|')
+            pred_sql_dict = self.sql_parser.sql_to_dict(metas[i]['db_id'], pred_sql.strip())
+            gold_sql_dict = self.sql_parser.raw_sql_to_dict(metas[i]['db_id'], metas[i]['query'])
+            cnt_all += 1
+            if self.sql_parser.check_equal(pred_sql_dict, gold_sql_dict):
+                cnt_correct += 1
+        return {'eval_exact_match': cnt_correct / cnt_all}

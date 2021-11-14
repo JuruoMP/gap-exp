@@ -14,7 +14,7 @@ from transformers.trainer_utils import get_last_checkpoint, set_seed
 from seq2seq.utils.args import ModelArguments
 from seq2seq.utils.dataset import DataTrainingArguments, DataArguments
 from seq2seq.utils.dataset_loader import load_dataset
-from seq2seq.trainer import SpiderTrainer, CoSQLTrainer
+from seq2seq.trainer import SpiderTrainer, CoSQLTrainer, SpiderSeqTrainer, CoSQLSeqTrainer
 
 def main():
     config_file = 'seq2seq/configs/train.json'
@@ -32,6 +32,7 @@ def main():
     )
 
     last_checkpoint = None
+    training_args.overwrite_output_dir = True
     if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
         if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
@@ -66,21 +67,23 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
+    model = AutoModelForSeq2SeqLM.from_pretrained(
+        model_args.model_name_or_path,
+        from_tf=bool(".ckpt" in model_args.model_name_or_path),
+        config=config,
+        cache_dir=model_args.cache_dir,
+        revision=model_args.model_revision,
+        use_auth_token=True if model_args.use_auth_token else None,
+    )
+    tokenizer.add_tokens(['<', '<='])
+    model.resize_token_embeddings(len(tokenizer))
+
     metric, dataset_splits = load_dataset(
         data_args=data_args,
         model_args=model_args,
         data_training_args=data_training_args,
         training_args=training_args,
         tokenizer=tokenizer,
-    )
-
-    model = AutoModelForSeq2SeqLM.from_pretrained(
-            model_args.model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),
-            config=config,
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
     )
 
     trainer_kwargs = {
@@ -100,7 +103,7 @@ def main():
         "ignore_pad_token_for_loss": data_training_args.ignore_pad_token_for_loss,
         "target_with_db_id": data_training_args.target_with_db_id,
     }
-    trainer = SpiderTrainer(**trainer_kwargs)
+    trainer = SpiderSeqTrainer(**trainer_kwargs)
     train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
     trainer.save_model()
     metrics = train_result.metrics

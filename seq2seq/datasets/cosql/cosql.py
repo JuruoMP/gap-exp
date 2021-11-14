@@ -17,6 +17,7 @@
 
 import json
 from third_party.spider.preprocess.get_tables import dump_db_json_schema
+from lf_util.sql_dict_parser import SqlDictParser
 
 import datasets
 
@@ -88,6 +89,8 @@ class CoSQL(datasets.GeneratorBasedBuilder):
     def __init__(self, *args, writer_batch_size=None, **kwargs):
         super().__init__(*args, writer_batch_size=writer_batch_size, **kwargs)
         self.schema_cache = dict()
+        self.lower_column = True
+        self.sql_dict_parser = SqlDictParser('data/cosql/tables.json', lower_column=self.lower_column)
         self.global_idx = 0
 
     def _info(self):
@@ -160,9 +163,9 @@ class CoSQL(datasets.GeneratorBasedBuilder):
                 db_stuff = {
                     "db_id": db_id,
                     "db_path": db_path,
-                    "db_table_names": schema["table_names_original"],
+                    "db_table_names": [x.lower() for x in schema["table_names_original"]] if self.lower_column else schema["table_names_original"],
                     "db_column_names": [
-                        {"table_id": table_id, "column_name": column_name}
+                        {"table_id": table_id, "column_name": column_name.lower() if self.lower_column else column_name}
                         for table_id, column_name in schema["column_names_original"]
                     ],
                     "db_column_types": schema["column_types"],
@@ -176,6 +179,7 @@ class CoSQL(datasets.GeneratorBasedBuilder):
                 yield self.global_idx, {
                     "utterances": [sample["final"]["utterance"]],
                     "query": sample["final"]["query"],
+                    # "query": self.sql_dict_parser.unparse(db_id, sample["interaction"][-1]["sql"]),
                     "turn_idx": -1,
                     **db_stuff,
                 }
@@ -186,6 +190,7 @@ class CoSQL(datasets.GeneratorBasedBuilder):
                     yield self.global_idx, {
                         "utterances": list(utterances),
                         "query": turn["query"],
+                        # "query": self.sql_dict_parser.unparse(db_id, turn["sql"]),
                         "turn_idx": turn_idx,
                         **db_stuff,
                     }
