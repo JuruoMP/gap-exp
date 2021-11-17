@@ -17,7 +17,7 @@
 
 import json
 from third_party.spider.preprocess.get_tables import dump_db_json_schema
-from lf_util.sql_dict_parser import SqlDictParser
+from seq2seq.lf_util.sql_dict_parser import SqlDictParser
 
 import datasets
 

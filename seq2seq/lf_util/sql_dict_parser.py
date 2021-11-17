@@ -2,9 +2,9 @@ import os
 import json
 from nltk import word_tokenize
 
-from .tree_algorithm import dijkstra, steiner_tree, check_connectitvity
-from .utils import tuple_to_list, list_to_set
-from seq2seq.third_party.spider.process_sql import get_sql, get_schema, Schema
+from seq2seq.lf_util.tree_algorithm import dijkstra, steiner_tree, check_connectitvity
+from seq2seq.lf_util.utils import tuple_to_list, list_to_set
+from seq2seq.lf_util.process_sql import get_sql, get_schema, Schema
 
 WHERE_OPS = [x.lower() for x in (
     "NOT",
@@ -744,7 +744,12 @@ class SqlParser:
             db_path = os.path.join(db_dir, db_name, db_name + ".sqlite")
             if os.path.exists(db_path):
                 self.db_paths[db_name] = db_path
-                self.schemas[db_name] = Schema(get_schema(db_path))
+                table_info = table_maps[db_name]
+                table_info.update({
+                    'table_names_original': [x.lower() for x in table_info['table_names_original']],
+                    'column_names_original': [[x[0], x[1].lower()] for x in table_info['column_names_original']]
+                })
+                self.schemas[db_name] = (table_info, Schema(get_schema(db_path)))
             else:
                 miss_db_list.append(db_name)
         if miss_db_list:
@@ -760,7 +765,7 @@ class SqlParser:
         return self.sql_dict_parser.unparse(db_id, sql_dict)
 
     def check_equal(self, sql_d1, sql_d2):
-        sql_d1, sql_d2 = list_to_set(sql_d1), list_to_set(sql_d2)
+        sql_d1, sql_d2 = list_to_set(tuple_to_list(sql_d1)), list_to_set(tuple_to_list(sql_d2))
 
         def swap_condition(sql_d):
             if sql_d and sql_d['from']:
@@ -786,16 +791,29 @@ class SqlParser:
             a = 1
         return new_sql_d1 == new_sql_d2
 
+    def check_equal_without_from(self, sql_d1, sql_d2):
+        def del_from(d):
+            if isinstance(d, dict):
+                if 'from' in d:
+                    del d['from']
+                for k in d:
+                    del_from(d[k])
+            elif isinstance(d, list):
+                d = [del_from(x) for x in d]
+            return d
+
+        sql_d1, sql_d2 = del_from(sql_d1), del_from(sql_d2)
+        return sql_d1 == sql_d2
+
     def raw_sql_to_dict(self, db_id, sql):
         schema = self.schemas[db_id]
-        return get_sql(schema, sql)
+        sql = get_sql(schema, sql)
+        return sql
 
 
-if __name__ == '__main__':
+if False:
     import os
     from tqdm import trange
-    # from seq2seq.third_party.spider.process_sql import get_sql, get_schema, Schema
-    from seq2seq.third_party.spider.process_sql import get_sql, get_schema, Schema
 
     sql_parser = SqlParser('data/spider/tables.json', db_dir='data/spider/database')
     dev_data = json.load(open('data/spider/train_spider.json'))
@@ -825,9 +843,12 @@ if __name__ == '__main__':
         try:
             raw_sql_dict = sql_parser.raw_sql_to_dict(db_name, raw_sql)
         except:
+            raw_sql_dict = {}
             raw_bad_case += 1
 
-        label = sql_parser.check_equal(sql_dict, my_sql_d)
+        # label = sql_parser.check_equal(sql_dict, my_sql_d)
+        label = sql_parser.check_equal(raw_sql_dict, my_sql_d)
+
         if label is True:
             correct += 1
         else:
@@ -836,7 +857,53 @@ if __name__ == '__main__':
             print(raw_sql)
             print(my_sql)
             print()
+
     print(f'#Case:{len(dev_data)}')
+    print(f'Bad case: {bad_case}')
+    print(f'Raw bad case: {raw_bad_case}')
+    print(f'Correct: {correct}')
+    print(f'Wrong: {wrong}')
+
+
+if __name__ == '__main__':
+    import os
+    from tqdm import trange
+
+    sql_parser = SqlParser('data/spider/tables.json', db_dir='data/spider/database')
+    pred_result = open('seq2seq/tmp/pred.txt', encoding='utf-8').readlines()
+    bad_case, raw_bad_case = 0, 0
+    correct, wrong = 0, 0
+    for i in range(len(pred_result)):
+    # for i in range(6961, 6962):
+        # print(i)
+        # print(dev_data[i]['question'])
+        db_name, pred_sql, raw_sql = pred_result[i].strip().split('\t')
+
+        if True:
+            my_sql_d = sql_parser.sql_to_dict(db_name, pred_sql)
+        else:
+            my_sql_d = {}
+            bad_case += 1
+        # print(json.dumps(new_sql_d, indent=2))
+        try:
+            raw_sql_dict = sql_parser.raw_sql_to_dict(db_name, raw_sql)
+        except:
+            raw_sql_dict = {}
+            raw_bad_case += 1
+
+        # label = sql_parser.check_equal(sql_dict, my_sql_d)
+        label = sql_parser.check_equal(raw_sql_dict, my_sql_d)
+
+        if label is True:
+            correct += 1
+        else:
+            wrong += 1
+            print(i)
+            print(pred_sql)
+            print(raw_sql)
+            print()
+
+    print(f'#Case:{len(pred_result)}')
     print(f'Bad case: {bad_case}')
     print(f'Raw bad case: {raw_bad_case}')
     print(f'Correct: {correct}')

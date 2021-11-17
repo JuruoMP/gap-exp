@@ -10,7 +10,8 @@ def tuple_to_list(obj):
         obj = [tuple_to_list(x) for x in obj]
         return obj
     elif isinstance(obj, tuple):
-        return list(obj)
+        obj = [tuple_to_list(x) for x in obj]
+        return obj
     else:
         return obj
 

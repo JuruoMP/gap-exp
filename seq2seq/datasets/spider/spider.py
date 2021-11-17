@@ -20,6 +20,8 @@ from third_party.spider.preprocess.get_tables import dump_db_json_schema
 
 import datasets
 
+from seq2seq.lf_util.sql_dict_parser import SqlDictParser
+
 
 logger = datasets.logging.get_logger(__name__)
 
@@ -58,6 +60,7 @@ class Spider(datasets.GeneratorBasedBuilder):
     def __init__(self, *args, writer_batch_size=None, **kwargs):
         super().__init__(*args, writer_batch_size=writer_batch_size, **kwargs)
         self.schema_cache = dict()
+        self.sql_dict_parser = SqlDictParser('data/spider/tables.json', lower_column=True)
 
     def _info(self):
         features = datasets.Features(
@@ -125,7 +128,8 @@ class Spider(datasets.GeneratorBasedBuilder):
                     )
                 schema = self.schema_cache[db_id]
                 yield idx, {
-                    "query": sample["query"],
+                    # "query": sample["query"],
+                    "query": self.sql_dict_parser.unparse(db_id, sample["sql"]),
                     "question": sample["question"],
                     "db_id": db_id,
                     "db_path": db_path,

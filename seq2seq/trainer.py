@@ -1,5 +1,6 @@
 import collections
 import json
+import os
 from typing import Dict, List, Optional, NamedTuple
 import transformers.trainer_seq2seq
 from transformers.trainer_utils import PredictionOutput, speed_metrics
@@ -316,15 +317,30 @@ class SpiderSeqTrainer(Seq2SeqTrainer):
     def _compute_metrics(self, eval_prediction: EvalPrediction) -> dict:
         predictions, label_ids, metas = eval_prediction
         cnt_all, cnt_correct = 0, 0
+        all_pred_list = []
         for i in range(len(predictions)):
             pred = predictions[i]
             _, pred_sql = pred.split('|')
             _, gold_sql = metas[i]['label'].split('|')
-            pred_sql_dict = self.sql_parser.sql_to_dict(metas[i]['db_id'], pred_sql.strip())
-            gold_sql_dict = self.sql_parser.raw_sql_to_dict(metas[i]['db_id'], metas[i]['query'])
+            all_pred_list.append((metas[i]['db_id'], pred_sql.strip(), metas[i]['query']))
+            try:
+                pred_sql_dict = self.sql_parser.sql_to_dict(metas[i]['db_id'], pred_sql.strip())
+            except:
+                pred_sql_dict = {}
+            try:
+                gold_sql_dict = self.sql_parser.raw_sql_to_dict(metas[i]['db_id'], metas[i]['query'])
+            except:
+                gold_sql_dict = {}
             cnt_all += 1
-            if self.sql_parser.check_equal(pred_sql_dict, gold_sql_dict):
-                cnt_correct += 1
+            try:
+                if self.sql_parser.check_equal(pred_sql_dict, gold_sql_dict):
+                    cnt_correct += 1
+            except:
+                pass
+        os.makedirs('logdir/spider_log', exist_ok=True)
+        with open('logdir/spider_log/pred.txt', 'w') as fw:
+            for db_id, pred, gold in all_pred_list:
+                fw.write(f"{db_id}\t{pred}\t{gold}\n")
         return {'eval_exact_match': cnt_correct / cnt_all}
 
 
@@ -375,9 +391,19 @@ class CoSQLSeqTrainer(Seq2SeqTrainer):
             pred = predictions[i]
             _, pred_sql = pred.split('|')
             _, gold_sql = metas[i]['label'].split('|')
-            pred_sql_dict = self.sql_parser.sql_to_dict(metas[i]['db_id'], pred_sql.strip())
-            gold_sql_dict = self.sql_parser.raw_sql_to_dict(metas[i]['db_id'], metas[i]['query'])
+            try:
+                pred_sql_dict = self.sql_parser.sql_to_dict(metas[i]['db_id'], pred_sql.strip())
+            except:
+                pred_sql_dict = {}
+            # try:
+            #     gold_sql_dict = self.sql_parser.raw_sql_to_dict(metas[i]['db_id'], metas[i]['query'])
+            # except:
+            #     gold_sql_dict = {}
+            gold_sql_dict = metas[i]['sql']
             cnt_all += 1
-            if self.sql_parser.check_equal(pred_sql_dict, gold_sql_dict):
-                cnt_correct += 1
+            try:
+                if self.sql_parser.check_equal(pred_sql_dict, gold_sql_dict):
+                    cnt_correct += 1
+            except:
+                pass
         return {'eval_exact_match': cnt_correct / cnt_all}
